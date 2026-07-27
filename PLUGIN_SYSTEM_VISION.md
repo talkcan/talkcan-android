@@ -238,16 +238,16 @@ Discovery presents two publisher tiers.
 
 ### Official
 
-A plugin is Official when it is published from the Talkcan GitHub organization (`talkcan`).
+A plugin is Official when it is published from the `talkcan` or `talkcan-channels` GitHub organization.
 
 Official identifies organizational provenance. It does not claim that the plugin is free of defects
 or that every release received a formal security audit. Official channels are expected to live in
-the `talkcan` repository family (for example `talkcan/talkcan-channels`) and use the same public
-plugin system as community channels.
+the `talkcan` or `talkcan-channels` repository family (for example `talkcan-channels/openai-agent`)
+and use the same public plugin system as community channels.
 
 ### Community — Unreviewed
 
-Every discovered plugin outside the Talkcan GitHub organization is Community — Unreviewed.
+Every discovered plugin outside the `talkcan` or `talkcan-channels` GitHub organization is Community — Unreviewed.
 
 The discovery surface and application both present a clear warning that:
 
