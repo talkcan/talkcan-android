@@ -161,13 +161,13 @@ class ExternalDebugChannelContractTest {
         const val RELEASE_ID = "359174403"
         const val ASSET_ID = "488198107"
         const val OFFICIAL_OWNER_ID = "1224006"
-        const val ARTIFACT_SIZE = 7184
-        const val ARTIFACT_SHA256 = "46b111d37c808c0f426a3d72f54558a24fac778dfe9f889682b37b0d4271b6bb"
+        const val ARTIFACT_SIZE = 7178
+        const val ARTIFACT_SHA256 = "960dedc7bf3eb1bbb2d29f465acc049671c22593611726a6f66951a977cc5b10"
         const val HISTORICAL_V1_0_0_PATH = "debug-channel/historical/v1.0.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_0_0_SHA256 = "f90c8c073378659acac1fbb63f100e1d1b180d69b05a154ecefc3cd17887b76a"
+        const val HISTORICAL_V1_0_0_SHA256 = "0f662e0344c41e67fb136b959094bd4e8f30f29ffd893d8485276db55edfb808"
         const val HISTORICAL_V1_1_0_PATH = "debug-channel/historical/v1.1.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_1_0_SHA256 = "464293ebdf2dade6a0577b4e99f52293faf80d3deebce84db7ae041143dd7342"
+        const val HISTORICAL_V1_1_0_SHA256 = "f0fdd81162ef12e3030f8d1979fb59664bb07ab870ea89df4a3bd4e0f2aa8aa3"
         const val HISTORICAL_V1_2_0_PATH = "debug-channel/historical/v1.2.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_2_0_SHA256 = "2ae022f3c5854a449ad7cbafd6fe8341a52e1bec29a991c9683f02add77aea74"
+        const val HISTORICAL_V1_2_0_SHA256 = "ff7e5dac333a579ef15243c01e66eeebf4b6475f86a1a0b86bbf0649b46fcf04"
     }
 }

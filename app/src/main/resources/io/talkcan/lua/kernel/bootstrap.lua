@@ -120,7 +120,7 @@ end
 
 talkcan.module_put = function(name, value)
   name = tostring(name)
-  if name == "talkcan" or string.sub(name, 1, 9) == "talkcan." then
+  if name == "talkcan" or string.sub(name, 1, 8) == "talkcan." then
     error("E_RESERVED_MODULE")
   end
   talkcan._modules[name] = value
@@ -674,7 +674,7 @@ function talkcan._new_image_namespace(sources, modules, image_env)
   }
   private.module_put = function(name, value)
     name = tostring(name)
-    if name == "talkcan" or string.sub(name, 1, 9) == "talkcan." then
+    if name == "talkcan" or string.sub(name, 1, 8) == "talkcan." then
       error("E_RESERVED_MODULE")
     end
     modules[name] = value
@@ -740,7 +740,7 @@ function require(name)
   end
 
   local is_reserved = false
-  if name == "talkcan" or string.sub(name, 1, 9) == "talkcan." then
+  if name == "talkcan" or string.sub(name, 1, 8) == "talkcan." then
     is_reserved = true
   end
 
@@ -811,7 +811,7 @@ function talkcan._install_image(entry, sources)
     end
     local preloaded = image_talkcan._preloaded[name]
     if preloaded ~= nil then return preloaded end
-    if name == "talkcan" or string.sub(name, 1, 9) == "talkcan." then
+    if name == "talkcan" or string.sub(name, 1, 8) == "talkcan." then
       error("E_RESERVED_MODULE")
     end
     if modules[name] ~= nil then return modules[name] end

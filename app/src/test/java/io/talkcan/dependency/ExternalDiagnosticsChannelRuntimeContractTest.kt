@@ -843,8 +843,8 @@ class ExternalDiagnosticsChannelRuntimeContractTest {
         const val RELEASE_ID = "359168468"
         const val ASSET_ID = "488185292"
         const val OFFICIAL_OWNER_ID = "1224006"
-        const val ARTIFACT_SHA256 = "c4d50ceef79aa6ea917641bab41a31c2be00f09f6b0e1c85c6af2e9b9abe1f06"
+        const val ARTIFACT_SHA256 = "41e5d8f5e5ad49e321ab4a48c2794e795934bd7d64af78ab9f6e982949444cd0"
         const val HISTORICAL_V1_0_0_PATH = "diagnostics-channel/historical/v1.0.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_0_0_SHA256 = "a1609ba59e3bac16dbcdf03532f9774848aaf18ec46137e6bda7cecc012c6b87"
+        const val HISTORICAL_V1_0_0_SHA256 = "054dd8e53288c7b896d73920813cf4e4d7fa87d0044924d16f675c722238bece"
     }
 }

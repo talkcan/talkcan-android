@@ -721,13 +721,13 @@ class KotlinLuaKernelModuleConformanceTest {
         val result = s.resultObject(probe)
 
         val expectedPreloaded = listOf(
-            "coroutine", "math", "string",
+            "coroutine", "math", "string", "table",
             "talkcan.audio", "talkcan.channel", "talkcan.fs",
             "talkcan.http", "talkcan.json", "talkcan.keyboard_output",
             "talkcan.log", "talkcan.playback", "talkcan.profiles",
             "talkcan.runtime", "talkcan.secrets", "talkcan.synthesis",
             "talkcan.transcription", "talkcan.work",
-            "table", "utf8",
+            "utf8",
         )
         val preloaded = result.getJSONArray("preloaded")
         assertEquals("preloaded module count", expectedPreloaded.size, preloaded.length())

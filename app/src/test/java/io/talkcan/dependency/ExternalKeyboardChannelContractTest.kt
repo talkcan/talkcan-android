@@ -466,7 +466,7 @@ class ExternalKeyboardChannelContractTest {
         const val RELEASE_ID = "359168730"
         const val ASSET_ID = "488185797"
         const val OFFICIAL_OWNER_ID = "1224006"
-        const val ARTIFACT_SIZE = 14291
-        const val ARTIFACT_SHA256 = "f4cef488cf4afbc8c3cad643d62e2511a99b314eed9fa823874f48e959e9397c"
+        const val ARTIFACT_SIZE = 14283
+        const val ARTIFACT_SHA256 = "8ad2d1f61bf6232251e709b9d11b75440386243f5435d51c2a12b99c4ef7dfdd"
     }
 }

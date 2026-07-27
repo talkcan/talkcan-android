@@ -1065,8 +1065,8 @@ class ExternalJournalChannelLifecycleContractTest {
         const val ASSET_ID = "491214391"
         const val OFFICIAL_OWNER_ID = "1224006"
         const val PACKAGE_VERSION = "2.0.0"
-        const val ARTIFACT_SIZE = 69740
-        const val ARTIFACT_SHA256 = "a1ac4217d2ca044eefed19da02899f3f3143f10ac22d7c8744bc1678e952b110"
+        const val ARTIFACT_SIZE = 69733
+        const val ARTIFACT_SHA256 = "5028e1b3b2855ae2dcb6493baff2ed5ccfd0e32cf59256370fc04a345db9f6e8"
         const val URI_A = "content://com.android.externalstorage.documents/tree/primary%3AJournalA"
         const val URI_B = "content://com.android.externalstorage.documents/tree/primary%3AJournalB"
         const val URI_C = "content://com.android.externalstorage.documents/tree/primary%3AJournalC"

@@ -153,7 +153,7 @@ class ExternalDiagnosticsChannelContractTest {
         private const val RELEASE_ID = "359168468"
         private const val ASSET_ID = "488185292"
         private const val OFFICIAL_OWNER_ID = "1224006"
-        private const val ARTIFACT_SIZE = 5234
-        private const val ARTIFACT_SHA256 = "c4d50ceef79aa6ea917641bab41a31c2be00f09f6b0e1c85c6af2e9b9abe1f06"
+        private const val ARTIFACT_SIZE = 5230
+        private const val ARTIFACT_SHA256 = "41e5d8f5e5ad49e321ab4a48c2794e795934bd7d64af78ab9f6e982949444cd0"
     }
 }

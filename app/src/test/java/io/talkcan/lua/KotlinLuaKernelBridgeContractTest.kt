@@ -103,7 +103,7 @@ class KotlinLuaKernelBridgeContractTest {
             ) as? LuaKernelOutcome.Completed ?: error("startup callback failed")
             val result = org.json.JSONObject(startup.value ?: error("startup returned no value"))
             assertEquals(
-                "[\"coroutine\",\"math\",\"string\",\"talkcan.audio\",\"talkcan.channel\",\"talkcan.fs\",\"talkcan.http\",\"talkcan.json\",\"talkcan.keyboard_output\",\"talkcan.log\",\"talkcan.playback\",\"talkcan.profiles\",\"talkcan.runtime\",\"talkcan.secrets\",\"talkcan.synthesis\",\"talkcan.transcription\",\"talkcan.work\",\"table\",\"utf8\"]",
+                "[\"coroutine\",\"math\",\"string\",\"table\",\"talkcan.audio\",\"talkcan.channel\",\"talkcan.fs\",\"talkcan.http\",\"talkcan.json\",\"talkcan.keyboard_output\",\"talkcan.log\",\"talkcan.playback\",\"talkcan.profiles\",\"talkcan.runtime\",\"talkcan.secrets\",\"talkcan.synthesis\",\"talkcan.transcription\",\"talkcan.work\",\"utf8\"]",
                 result.getJSONArray("preloaded").toString(),
             )
             assertEquals(0, result.getJSONArray("forbidden").length())

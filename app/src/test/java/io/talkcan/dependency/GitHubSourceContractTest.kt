@@ -580,15 +580,15 @@ class GitHubSourceContractTest {
         private const val DIAGNOSTICS_ASSET_ID = "488185292"
         private const val DIAGNOSTICS_PUBLISHED_AT = "2026-07-24T08:22:32Z"
         private const val DIAGNOSTICS_PUBLISHED_EPOCH = 1784881352L
-        private const val DIAGNOSTICS_SIZE = 5234L
-        private const val DIAGNOSTICS_SHA256 = "c4d50ceef79aa6ea917641bab41a31c2be00f09f6b0e1c85c6af2e9b9abe1f06"
+        private const val DIAGNOSTICS_SIZE = 5230L
+        private const val DIAGNOSTICS_SHA256 = "41e5d8f5e5ad49e321ab4a48c2794e795934bd7d64af78ab9f6e982949444cd0"
         private const val DEBUG_REPOSITORY_ID = "1306065111"
         private const val DEBUG_RELEASE_ID = "359174403"
         private const val DEBUG_ASSET_ID = "488198107"
         private const val DEBUG_PUBLISHED_AT = "2026-07-24T08:36:00Z"
         private const val DEBUG_PUBLISHED_EPOCH = 1784882160L
-        private const val DEBUG_SIZE = 7184L
-        private const val DEBUG_SHA256 = "46b111d37c808c0f426a3d72f54558a24fac778dfe9f889682b37b0d4271b6bb"
+        private const val DEBUG_SIZE = 7178L
+        private const val DEBUG_SHA256 = "960dedc7bf3eb1bbb2d29f465acc049671c22593611726a6f66951a977cc5b10"
 
         private fun response(code: Int, body: String, headers: Map<String, String> = emptyMap()): FakeResponse =
             FakeResponse(code, body.toByteArray(), headers)

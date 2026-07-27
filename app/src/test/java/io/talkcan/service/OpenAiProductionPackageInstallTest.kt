@@ -81,7 +81,7 @@ class OpenAiProductionPackageInstallTest {
                 // 1. Resolve + inspect through the production REST client. The submitted
                 // URL carries a mixed-case owner; every later exchange must use the
                 // canonical coordinates decoded from the resolved repository metadata.
-                harness.management.resolveRepository("https://github.com/Talkcan/openai-agent-channel")
+                harness.management.resolveRepository("https://github.com/Talkcan-channels/openai-agent")
                 val selection = awaitSelection(harness.management)
 
                 assertEquals(
@@ -104,9 +104,9 @@ class OpenAiProductionPackageInstallTest {
 
                 // Single compatible candidate: the exact published release, asset, and digest.
                 assertEquals(GitHubRepositoryIdentity(REPOSITORY_ID), selection.repository.id)
-                assertEquals("talkcan/openai-agent-channel", selection.repository.fullName)
+                assertEquals("talkcan-channels/openai-agent", selection.repository.fullName)
                 assertEquals(OFFICIAL_OWNER_ID, selection.repository.owner.ownerId)
-                assertEquals("talkcan", selection.repository.owner.login)
+                assertEquals("talkcan-channels", selection.repository.owner.login)
                 assertTrue("the published release must pass inspection with no ineligible siblings", selection.ineligible.isEmpty())
                 val candidate = selection.candidates.single()
                 assertEquals(RELEASE_ID, candidate.release.releaseId)
@@ -126,9 +126,9 @@ class OpenAiProductionPackageInstallTest {
                 val trust = awaitingTrust(harness.management)
                 assertEquals(GitHubPublisherTier.OFFICIAL, trust.tier)
                 assertEquals(GitHubPublisherTier.OFFICIAL, trust.confirmation.publisherTier)
-                assertEquals("https://github.com/talkcan/openai-agent-channel", trust.confirmation.canonicalRepositoryUrl)
-                assertEquals("talkcan", trust.confirmation.canonicalOwner)
-                assertEquals("openai-agent-channel", trust.confirmation.canonicalRepository)
+                assertEquals("https://github.com/talkcan-channels/openai-agent", trust.confirmation.canonicalRepositoryUrl)
+                assertEquals("talkcan-channels", trust.confirmation.canonicalOwner)
+                assertEquals("openai-agent", trust.confirmation.canonicalRepository)
                 assertEquals("OpenAI Agent", trust.confirmation.packageLabel)
                 assertEquals(
                     "OpenAI-compatible agent channel with tool calling and voice output",
@@ -204,7 +204,7 @@ class OpenAiProductionPackageInstallTest {
                 assertEquals(
                     PackageSourceRecord(
                         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-                        coordinates = GitHubRepositoryCoordinates("talkcan", "openai-agent-channel"),
+                        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "openai-agent"),
                         release = GitHubReleaseIdentity(RELEASE_ID, RELEASE_TAG, false),
                         asset = GitHubAssetIdentity(ASSET_ID, GitHubSourceConfiguration.CANONICAL_ASSET_NAME),
                         ownerId = OFFICIAL_OWNER_ID,
@@ -244,8 +244,8 @@ class OpenAiProductionPackageInstallTest {
                 assertEquals(PackageManagementState.Ready, harness.management.managementState.value.state)
                 val summary = harness.management.managementState.value.installedPackages.single()
                 assertEquals(GitHubRepositoryIdentity(REPOSITORY_ID), summary.repositoryId)
-                assertEquals("talkcan", summary.canonicalOwner)
-                assertEquals("openai-agent-channel", summary.canonicalRepository)
+                assertEquals("talkcan-channels", summary.canonicalOwner)
+                assertEquals("openai-agent", summary.canonicalRepository)
                 assertEquals(GitHubPublisherTier.OFFICIAL, summary.trustTier)
                 assertEquals(PACKAGE_VERSION, summary.packageVersion)
                 assertEquals(RELEASE_TAG, summary.releaseTag)
@@ -421,36 +421,36 @@ class OpenAiProductionPackageInstallTest {
 
     private companion object {
         const val RESOURCE_PATH = "openai-agent-channel/talkcan-channel.zip"
-        const val REPOSITORY_ID = "1310575072"
+        const val REPOSITORY_ID = "1313913383"
         const val OFFICIAL_OWNER_ID = "1224006"
         const val RELEASE_ID = "359437600"
         const val RELEASE_TAG = "v1.0.7"
         const val ASSET_ID = "488626975"
         const val PACKAGE_VERSION = "1.0.7"
         const val PUBLISHED_AT = "2026-07-24T17:08:37Z"
-        const val ARTIFACT_SIZE = 173159
-        const val ARTIFACT_SHA256 = "a851e12a6d3f2a6e311df6b07c435beeacfd5a5b89eaa2bfad147b90c80073da"
+        const val ARTIFACT_SIZE = 173132
+        const val ARTIFACT_SHA256 = "602cbf54008e5e204de08118b6a2131bb5f5fac120f0a42ff5eb0e529a00d9f3"
 
         // Mixed-case owner in the submitted URL proves every later exchange uses the
         // canonical coordinates decoded from the resolved repository metadata.
-        const val SUBMITTED_REPOSITORY_URL = "https://api.github.com/repos/Talkcan/openai-agent-channel"
-        const val RELEASES_URL = "https://api.github.com/repos/talkcan/openai-agent-channel/releases"
-        const val ASSET_API_URL = "https://api.github.com/repos/talkcan/openai-agent-channel/releases/assets/$ASSET_ID"
+        const val SUBMITTED_REPOSITORY_URL = "https://api.github.com/repos/Talkcan-channels/openai-agent"
+        const val RELEASES_URL = "https://api.github.com/repos/talkcan-channels/openai-agent/releases"
+        const val ASSET_API_URL = "https://api.github.com/repos/talkcan-channels/openai-agent/releases/assets/$ASSET_ID"
         const val ASSET_OBJECT_URL =
             "https://objects.githubusercontent.com/github-production-release-asset-2e65be/$REPOSITORY_ID/$ASSET_ID.zip" +
                 "?response-content-disposition=attachment%3B%20filename%3Dtalkcan-channel.zip" +
                 "&response-content-type=application%2Fzip"
 
         const val REPOSITORY_JSON =
-            "{\"id\":$REPOSITORY_ID,\"full_name\":\"talkcan/openai-agent-channel\",\"archived\":false," +
+            "{\"id\":$REPOSITORY_ID,\"full_name\":\"talkcan-channels/openai-agent\",\"archived\":false," +
                 "\"disabled\":false,\"visibility\":\"public\"," +
-                "\"owner\":{\"id\":$OFFICIAL_OWNER_ID,\"login\":\"talkcan\",\"type\":\"User\"}}"
+                "\"owner\":{\"id\":$OFFICIAL_OWNER_ID,\"login\":\"talkcan-channels\",\"type\":\"User\"}}"
 
         const val RELEASES_JSON =
             "[{\"id\":$RELEASE_ID,\"tag_name\":\"$RELEASE_TAG\",\"name\":\"$RELEASE_TAG\",\"draft\":false," +
                 "\"prerelease\":false,\"published_at\":\"$PUBLISHED_AT\"," +
                 "\"assets\":[{\"id\":$ASSET_ID,\"name\":\"${GitHubSourceConfiguration.CANONICAL_ASSET_NAME}\"," +
                 "\"state\":\"uploaded\",\"content_type\":\"application/zip\",\"size\":$ARTIFACT_SIZE," +
-                "\"browser_download_url\":\"https://github.com/talkcan/openai-agent-channel/releases/download/$RELEASE_TAG/${GitHubSourceConfiguration.CANONICAL_ASSET_NAME}\"}]}]"
+                "\"browser_download_url\":\"https://github.com/talkcan-channels/openai-agent/releases/download/$RELEASE_TAG/${GitHubSourceConfiguration.CANONICAL_ASSET_NAME}\"}]}]"
     }
 }

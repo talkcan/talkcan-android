@@ -417,7 +417,7 @@ class ExternalOpenAiAgentChannelContractTest {
 
     private fun sourceRecord(): PackageSourceRecord = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "openai-agent-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "openai-agent"),
         release = GitHubReleaseIdentity(RELEASE_ID, RELEASE_TAG, false),
         asset = GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -513,7 +513,7 @@ class ExternalOpenAiAgentChannelContractTest {
 
     private companion object {
         const val RESOURCE_PATH = "openai-agent-channel/talkcan-channel.zip"
-        const val REPOSITORY_ID = "1310575072"
+        const val REPOSITORY_ID = "1313913383"
         const val PACKAGE_VERSION = "1.0.7"
         const val RELEASE_TAG = "v1.0.7"
         // Published v1.0.7 provenance (release tag commit
@@ -521,8 +521,8 @@ class ExternalOpenAiAgentChannelContractTest {
         const val RELEASE_ID = "359437600"
         const val ASSET_ID = "488626975"
         const val OFFICIAL_OWNER_ID = "1224006"
-        const val ARTIFACT_SIZE = 173159
-        const val ARTIFACT_SHA256 = "a851e12a6d3f2a6e311df6b07c435beeacfd5a5b89eaa2bfad147b90c80073da"
+        const val ARTIFACT_SIZE = 173132
+        const val ARTIFACT_SHA256 = "602cbf54008e5e204de08118b6a2131bb5f5fac120f0a42ff5eb0e529a00d9f3"
 
         val EXPECTED_ENTRIES = listOf(
             "manifest.json",
