@@ -39,13 +39,13 @@
       "locked": {
         "lastModified": 1783387264,
         "narHash": "sha256-XoGBecTNyuJrn3NOsWu4g1e/h6X7AGE+yhVef/5H64I=",
-        "owner": "talkcan",
+        "owner": "nilp0inter",
         "repo": "OmniKeymap",
         "rev": "da592a0a207b2900dbfd82083735bb9feb85daba",
         "type": "github"
       },
       "original": {
-        "owner": "talkcan",
+        "owner": "nilp0inter",
         "ref": "main",
         "repo": "OmniKeymap",
         "type": "github"
@@ -64,13 +64,13 @@
       "locked": {
         "lastModified": 1783391476,
         "narHash": "sha256-c/jh3zEttfo1FgHl9/Va76xrurHjxIcSD7ZZrKRvDsA=",
-        "owner": "talkcan",
+        "owner": "nilp0inter",
         "repo": "sleepwalker",
         "rev": "aeb5adc6c48d3f8f779314b7401964f6c5e5e905",
         "type": "github"
       },
       "original": {
-        "owner": "talkcan",
+        "owner": "nilp0inter",
         "repo": "sleepwalker",
         "rev": "aeb5adc6c48d3f8f779314b7401964f6c5e5e905",
         "type": "github"

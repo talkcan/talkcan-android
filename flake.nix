@@ -5,11 +5,11 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     omni-keymap = {
-      url = "github:talkcan/OmniKeymap/main";
+      url = "github:nilp0inter/OmniKeymap/main";
       flake = false;
     };
     sleepwalker = {
-      url = "github:talkcan/sleepwalker/aeb5adc6c48d3f8f779314b7401964f6c5e5e905";
+      url = "github:nilp0inter/sleepwalker/aeb5adc6c48d3f8f779314b7401964f6c5e5e905";
       flake = false;
     };
   };
