@@ -853,7 +853,7 @@ class ExternalJournalChannelLifecycleContractTest {
 
     private fun sourceRecord() = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "journal-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "journal"),
         release = GitHubReleaseIdentity(RELEASE_ID, "v$PACKAGE_VERSION", false),
         asset = GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -861,7 +861,7 @@ class ExternalJournalChannelLifecycleContractTest {
 
     private fun successorSourceRecord() = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "journal-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "journal"),
         release = GitHubReleaseIdentity("2", "v1.0.1", false),
         asset = GitHubAssetIdentity("2", "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -869,7 +869,7 @@ class ExternalJournalChannelLifecycleContractTest {
 
     private fun incompatibleSourceRecord() = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "journal-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "journal"),
         release = GitHubReleaseIdentity("3", "v2.0.0", false),
         asset = GitHubAssetIdentity("3", "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -1060,13 +1060,13 @@ class ExternalJournalChannelLifecycleContractTest {
 
     private companion object {
         const val RESOURCE_PATH = "journal-channel/talkcan-channel.zip"
-        const val REPOSITORY_ID = "1309332087"
+        const val REPOSITORY_ID = "1313912742"
         const val RELEASE_ID = "360293138"
         const val ASSET_ID = "491214391"
         const val OFFICIAL_OWNER_ID = "1224006"
         const val PACKAGE_VERSION = "2.0.0"
         const val ARTIFACT_SIZE = 69733
-        const val ARTIFACT_SHA256 = "5028e1b3b2855ae2dcb6493baff2ed5ccfd0e32cf59256370fc04a345db9f6e8"
+        const val ARTIFACT_SHA256 = "10cb052c077116d41f2936ea8574165a57d5bb617fb1eee9f7971984b9372c5e"
         const val URI_A = "content://com.android.externalstorage.documents/tree/primary%3AJournalA"
         const val URI_B = "content://com.android.externalstorage.documents/tree/primary%3AJournalB"
         const val URI_C = "content://com.android.externalstorage.documents/tree/primary%3AJournalC"

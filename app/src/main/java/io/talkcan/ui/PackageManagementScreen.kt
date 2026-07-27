@@ -125,11 +125,11 @@ private data class RecommendedPackage(
 // are shown; the canonical URLs are passed verbatim to resolvePackageRepository, identical to
 // typing the URL and pressing Resolve.
 private val recommendedPackages = listOf(
-    RecommendedPackage("Journal", "https://github.com/talkcan/journal-channel"),
-    RecommendedPackage("Keyboard", "https://github.com/talkcan/keyboard-channel"),
-    RecommendedPackage("OpenAI Agent", "https://github.com/talkcan/openai-agent-channel"),
-    RecommendedPackage("Debug", "https://github.com/talkcan/debug-channel"),
-    RecommendedPackage("Diagnostics", "https://github.com/talkcan/diagnostics-channel"),
+    RecommendedPackage("Journal", "https://github.com/talkcan-channels/journal"),
+    RecommendedPackage("Keyboard", "https://github.com/talkcan-channels/keyboard"),
+    RecommendedPackage("OpenAI Agent", "https://github.com/talkcan-channels/openai-agent"),
+    RecommendedPackage("Debug", "https://github.com/talkcan-channels/debug"),
+    RecommendedPackage("Diagnostics", "https://github.com/talkcan-channels/diagnostics"),
 )
 
 @Composable

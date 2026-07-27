@@ -110,7 +110,7 @@ class ExternalDebugChannelContractTest {
 
     private fun sourceRecord() = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "debug-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "debug"),
         release = GitHubReleaseIdentity(RELEASE_ID, "v1.3.0", false),
         asset = GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -157,17 +157,17 @@ class ExternalDebugChannelContractTest {
 
     private companion object {
         const val RESOURCE_PATH = "debug-channel/talkcan-channel.zip"
-        const val REPOSITORY_ID = "1306065111"
+        const val REPOSITORY_ID = "1313907886"
         const val RELEASE_ID = "359174403"
         const val ASSET_ID = "488198107"
         const val OFFICIAL_OWNER_ID = "1224006"
         const val ARTIFACT_SIZE = 7178
-        const val ARTIFACT_SHA256 = "960dedc7bf3eb1bbb2d29f465acc049671c22593611726a6f66951a977cc5b10"
+        const val ARTIFACT_SHA256 = "ed3537b4c7d2806227ffdb28187d3cd8b3a34127cf9ad2f01d8b5de13c831594"
         const val HISTORICAL_V1_0_0_PATH = "debug-channel/historical/v1.0.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_0_0_SHA256 = "0f662e0344c41e67fb136b959094bd4e8f30f29ffd893d8485276db55edfb808"
+        const val HISTORICAL_V1_0_0_SHA256 = "4c79de5724bba37edabc45155490439aac586539c8103c3600f8565edf35f36d"
         const val HISTORICAL_V1_1_0_PATH = "debug-channel/historical/v1.1.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_1_0_SHA256 = "f0fdd81162ef12e3030f8d1979fb59664bb07ab870ea89df4a3bd4e0f2aa8aa3"
+        const val HISTORICAL_V1_1_0_SHA256 = "f4fb8ca5ead2fd10d6a51d87e9b6df72358256970fa5171b8c679129211f5b4b"
         const val HISTORICAL_V1_2_0_PATH = "debug-channel/historical/v1.2.0/talkcan-channel.zip"
-        const val HISTORICAL_V1_2_0_SHA256 = "ff7e5dac333a579ef15243c01e66eeebf4b6475f86a1a0b86bbf0649b46fcf04"
+        const val HISTORICAL_V1_2_0_SHA256 = "7845bc14899a930aada0465bdbdf4021624ea7ec0ebab0a17bb5abd9b73f2372"
     }
 }

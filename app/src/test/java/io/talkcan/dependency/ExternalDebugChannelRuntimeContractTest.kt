@@ -381,7 +381,7 @@ class ExternalDebugChannelRuntimeContractTest {
     }
 
     private fun fixture() = requireNotNull(javaClass.classLoader?.getResourceAsStream("debug-channel/talkcan-channel.zip")).use { it.readBytes() }
-    private fun sourceRecord() = PackageSourceRecord(GitHubRepositoryIdentity(REPOSITORY_ID), GitHubRepositoryCoordinates("talkcan", "debug-channel"), GitHubReleaseIdentity(RELEASE_ID, "v1.3.0", false), GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"), OWNER)
+    private fun sourceRecord() = PackageSourceRecord(GitHubRepositoryIdentity(REPOSITORY_ID), GitHubRepositoryCoordinates("talkcan-channels", "debug"), GitHubReleaseIdentity(RELEASE_ID, "v1.3.0", false), GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"), OWNER)
     private suspend fun <T> withTemporaryDirectory(block: suspend (File) -> T): T { val root = createTempDirectory("debug-runtime-").toFile(); return try { block(root) } finally { root.deleteRecursively() } }
 
     private object FakeSession : ChannelAudioInputSession { override val sampleRate = 16_000; override val frames = emptyFlow<ShortArray>() }
@@ -457,7 +457,7 @@ class ExternalDebugChannelRuntimeContractTest {
     }
 
     private companion object {
-        const val REPOSITORY_ID = "1306065111"
+        const val REPOSITORY_ID = "1313907886"
         const val RELEASE_ID = "359174403"
         const val ASSET_ID = "488198107"
         const val OWNER = "1224006"

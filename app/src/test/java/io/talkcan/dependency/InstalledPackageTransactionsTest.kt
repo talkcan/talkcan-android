@@ -541,8 +541,8 @@ class InstalledPackageTransactionsTest {
     fun `pre-cutover artifacts and indexes fail closed under the revised contract without rewriting stored bytes`() = runTest {
         withTemporaryDirectory { root ->
             val historicalBytes = loadResource("diagnostics-channel/historical/v1.1.0/talkcan-channel.zip")
-            val historicalSource = sourceRecord("1305223892", "2", "2").copy(
-                coordinates = GitHubRepositoryCoordinates("talkcan", "diagnostics-channel"),
+            val historicalSource = sourceRecord("1313912734", "2", "2").copy(
+                coordinates = GitHubRepositoryCoordinates("talkcan-channels", "diagnostics"),
                 release = GitHubReleaseIdentity("2", "v1.1.0", false),
                 asset = GitHubAssetIdentity("2", "talkcan-channel.zip"),
             )

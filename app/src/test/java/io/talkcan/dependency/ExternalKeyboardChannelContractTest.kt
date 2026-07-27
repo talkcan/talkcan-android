@@ -363,7 +363,7 @@ class ExternalKeyboardChannelContractTest {
 
     private fun sourceRecord(): PackageSourceRecord = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "keyboard-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "keyboard"),
         release = GitHubReleaseIdentity(RELEASE_ID, "v$PACKAGE_VERSION", false),
         asset = GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -459,7 +459,7 @@ class ExternalKeyboardChannelContractTest {
 
     private companion object {
         const val RESOURCE_PATH = "keyboard-channel/talkcan-channel.zip"
-        const val REPOSITORY_ID = "1310281239"
+        const val REPOSITORY_ID = "1313912752"
         const val PACKAGE_VERSION = "1.1.0"
         // Published v1.1.0 provenance (release tag commit
         // c1e312ee4699035efce4fd4f0cf927155a87921d).
@@ -467,6 +467,6 @@ class ExternalKeyboardChannelContractTest {
         const val ASSET_ID = "488185797"
         const val OFFICIAL_OWNER_ID = "1224006"
         const val ARTIFACT_SIZE = 14283
-        const val ARTIFACT_SHA256 = "8ad2d1f61bf6232251e709b9d11b75440386243f5435d51c2a12b99c4ef7dfdd"
+        const val ARTIFACT_SHA256 = "ef919418b8716c62e82948fffe96e8d57254e55f381f86df356b809ed46f7962"
     }
 }

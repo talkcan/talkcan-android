@@ -449,7 +449,7 @@ class DiagnosticsLegacyRejectionContractTest {
 
     private fun diagnosticsSourceRecord(): PackageSourceRecord = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "diagnostics-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "diagnostics"),
         release = GitHubReleaseIdentity(RELEASE_ID, "v$EVOLVED_PACKAGE_VERSION", false),
         asset = GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"),
         ownerId = OWNER_ID,
@@ -651,15 +651,15 @@ class DiagnosticsLegacyRejectionContractTest {
     private companion object {
         private const val EVOLVED_RESOURCE_PATH = "diagnostics-channel/talkcan-channel-v1.3.1.zip"
         private const val HISTORICAL_RESOURCE_BASE = "diagnostics-channel/historical"
-        private const val REPOSITORY_ID = "1305223892"
+        private const val REPOSITORY_ID = "1313912734"
         private const val RELEASE_ID = "359168468"
         private const val ASSET_ID = "488185292"
         private const val OWNER_ID = "1224006"
         private const val EVOLVED_PACKAGE_VERSION = "1.3.1"
-        private const val EVOLVED_ARTIFACT_SHA256 = "41e5d8f5e5ad49e321ab4a48c2794e795934bd7d64af78ab9f6e982949444cd0"
-        private const val HISTORICAL_V1_0_0_SHA256 = "054dd8e53288c7b896d73920813cf4e4d7fa87d0044924d16f675c722238bece"
-        private const val HISTORICAL_V1_1_0_SHA256 = "0407ee647b0b4c422b10671db85ada09ed05e5e578469b0149def0e4289fff61"
-        private const val HISTORICAL_V1_2_0_SHA256 = "e23b5b325b35e431a0e530f43436b557283a23cec9812e9c96b22944974e7425"
+        private const val EVOLVED_ARTIFACT_SHA256 = "7a1f9363f5b7784fa238b334d5eb5a8815ed5fe2f742bf15b6db284dece525d2"
+        private const val HISTORICAL_V1_0_0_SHA256 = "0f8eb356f9bacea3fe516e5ec2079b2cd05636f9656bbe22ff76c436bfe0f1f9"
+        private const val HISTORICAL_V1_1_0_SHA256 = "1cf88bae246e01805c2346e28530756d2fa22771558f9443a5bb31eb9d512ddd"
+        private const val HISTORICAL_V1_2_0_SHA256 = "e1e40a8d269d291f2c5ac8e98d8435a38452448de08be2ec58a950924c2e5048"
         private const val CONFIGURATION_KEY = "configuration"
         private const val CAPABILITIES_KEY = "capabilities"
         private const val RESOURCES_KEY = "resources"

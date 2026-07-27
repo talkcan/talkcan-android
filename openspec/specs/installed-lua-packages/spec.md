@@ -150,9 +150,9 @@ After the host adopts the revised unreleased manifest v1, every production/exter
 
 ### Requirement: Official package acceptance pins exact revised releases
 End-to-end dependency acceptance for this change SHALL resolve and install exact immutable assets for:
-- Debug: `talkcan/debug-channel`, owner database ID `1224006`, `v1.2.0`, asset `talkcan-channel.zip`.
-- Diagnostics: `talkcan/diagnostics-channel`, owner database ID `1224006`, `v1.3.0`, asset `talkcan-channel.zip`.
-- Journal: `talkcan/journal-channel`, owner database ID `1224006`, `v1.0.0`, asset `talkcan-channel.zip`.
+- Debug: `talkcan-channels/debug`, owner database ID `1224006`, `v1.2.0`, asset `talkcan-channel.zip`.
+- Diagnostics: `talkcan-channels/diagnostics`, owner database ID `1224006`, `v1.3.0`, asset `talkcan-channel.zip`.
+- Journal: `talkcan-channels/journal`, owner database ID `1224006`, `v1.0.0`, asset `talkcan-channel.zip`.
 
 Each release SHALL be stable/non-draft/non-prerelease, contain exactly one canonical asset of that name, and contain a positive immutable repository database ID matching manifest `repositoryId`. Release immutability in this contract is the project policy that published tags and assets are never replaced; GitHub's optional immutable-releases repository feature is not required. Fixtures, hashes, release metadata, and installation tests SHALL be updated together only from inspected exact assets. Runtime tests SHALL not make live network calls.
 

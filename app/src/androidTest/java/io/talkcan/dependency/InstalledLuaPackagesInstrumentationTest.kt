@@ -955,9 +955,9 @@ class InstalledLuaPackagesInstrumentationTest {
         val CORRUPT_REPOSITORY = GitHubRepositoryIdentity("9002")
         val INSTALLED_ID: ChannelImplementationId = InstalledProviderId.derive(SOURCE_REPOSITORY)
         val CORRUPT_ID: ChannelImplementationId = InstalledProviderId.derive(CORRUPT_REPOSITORY)
-        val DEBUG_REPOSITORY = GitHubRepositoryIdentity("1306065111")
+        val DEBUG_REPOSITORY = GitHubRepositoryIdentity("1313907886")
         val AUDIO_MODULES_REPOSITORY = GitHubRepositoryIdentity("1306065112")
-        val DEBUG_SOURCE_RECORD = PackageSourceRecord(DEBUG_REPOSITORY, GitHubRepositoryCoordinates("talkcan", "debug-channel"), GitHubReleaseIdentity("1", "v1.0.0", false), GitHubAssetIdentity("1", "talkcan-channel.zip"), "1224006")
+        val DEBUG_SOURCE_RECORD = PackageSourceRecord(DEBUG_REPOSITORY, GitHubRepositoryCoordinates("talkcan-channels", "debug"), GitHubReleaseIdentity("1", "v1.0.0", false), GitHubAssetIdentity("1", "talkcan-channel.zip"), "1224006")
         val AUDIO_MODULES_SOURCE_RECORD = PackageSourceRecord(AUDIO_MODULES_REPOSITORY, GitHubRepositoryCoordinates("talkcan", "audio-modules"), GitHubReleaseIdentity("1", "v1.0.0", false), GitHubAssetIdentity("1", "audio-modules.zip"), "1224006")
         const val WAIT_MILLIS = 10_000L
         const val POLL_MILLIS = 20L

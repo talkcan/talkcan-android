@@ -5,7 +5,7 @@ Defines the external, non-bundled Lua Journal package: publication identity, dec
 ## Requirements
 
 ### Requirement: Journal is published as an external non-bundled Lua package
-The canonical package SHALL be published from `talkcan/journal-channel` under the existing official owner database ID `1224006`. Its manifest repository ID SHALL equal the positive immutable repository database ID resolved after repository creation. Release `v1.0.0` SHALL be stable, non-draft, non-prerelease, and contain exactly one canonical `talkcan-channel.zip` asset with the revised manifest v1 and source-only Lua modules. The application SHALL not bundle package source or bytes, automatically install it, automatically create an instance, or add repository/name/implementation-specific production dispatch.
+The canonical package SHALL be published from `talkcan-channels/journal` under the existing official owner database ID `1224006`. Its manifest repository ID SHALL equal the positive immutable repository database ID resolved after repository creation. Release `v1.0.0` SHALL be stable, non-draft, non-prerelease, and contain exactly one canonical `talkcan-channel.zip` asset with the revised manifest v1 and source-only Lua modules. The application SHALL not bundle package source or bytes, automatically install it, automatically create an instance, or add repository/name/implementation-specific production dispatch.
 
 #### Scenario: Public Journal package is installed
 - **WHEN** the user installs the exact public release asset through generic GitHub package management

@@ -266,8 +266,8 @@ class ExternalKeyboardChannelPackageContractTest {
     }
 
     private fun sourceRecord() = PackageSourceRecord(
-        repositoryId = GitHubRepositoryIdentity("1310281239"),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "keyboard-channel"),
+        repositoryId = GitHubRepositoryIdentity("1313912752"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "keyboard"),
         release = GitHubReleaseIdentity("1310281239001", "v1.0.0", false),
         asset = GitHubAssetIdentity("1310281239002", "talkcan-channel.zip"),
         ownerId = "1224006",

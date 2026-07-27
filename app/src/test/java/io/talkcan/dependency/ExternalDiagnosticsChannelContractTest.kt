@@ -73,7 +73,7 @@ class ExternalDiagnosticsChannelContractTest {
 
     private fun sourceRecord(): PackageSourceRecord = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
-        coordinates = GitHubRepositoryCoordinates("talkcan", "diagnostics-channel"),
+        coordinates = GitHubRepositoryCoordinates("talkcan-channels", "diagnostics"),
         release = GitHubReleaseIdentity(RELEASE_ID, "v1.3.1", false),
         asset = GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
@@ -149,11 +149,11 @@ class ExternalDiagnosticsChannelContractTest {
 
     private companion object {
         private const val RESOURCE_PATH = "diagnostics-channel/talkcan-channel-v1.3.1.zip"
-        private const val REPOSITORY_ID = "1305223892"
+        private const val REPOSITORY_ID = "1313912734"
         private const val RELEASE_ID = "359168468"
         private const val ASSET_ID = "488185292"
         private const val OFFICIAL_OWNER_ID = "1224006"
         private const val ARTIFACT_SIZE = 5230
-        private const val ARTIFACT_SHA256 = "41e5d8f5e5ad49e321ab4a48c2794e795934bd7d64af78ab9f6e982949444cd0"
+        private const val ARTIFACT_SHA256 = "7a1f9363f5b7784fa238b334d5eb5a8815ed5fe2f742bf15b6db284dece525d2"
     }
 }

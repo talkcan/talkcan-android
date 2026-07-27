@@ -263,9 +263,9 @@ class GitHubSourceContractTest {
         assertTrue(archive.contentEquals(downloaded.toByteArray()))
         assertEquals(
             listOf(
-                "https://api.github.com/repos/talkcan/diagnostics-channel",
-                "https://api.github.com/repos/talkcan/diagnostics-channel/releases",
-                "https://api.github.com/repos/talkcan/diagnostics-channel/releases/assets/$DIAGNOSTICS_ASSET_ID",
+                "https://api.github.com/repos/talkcan-channels/diagnostics",
+                "https://api.github.com/repos/talkcan-channels/diagnostics/releases",
+                "https://api.github.com/repos/talkcan-channels/diagnostics/releases/assets/$DIAGNOSTICS_ASSET_ID",
             ),
             transport.requests.map { it.url },
         )
@@ -299,9 +299,9 @@ class GitHubSourceContractTest {
         assertTrue(archive.contentEquals(downloaded.toByteArray()))
         assertEquals(
             listOf(
-                "https://api.github.com/repos/talkcan/debug-channel",
-                "https://api.github.com/repos/talkcan/debug-channel/releases",
-                "https://api.github.com/repos/talkcan/debug-channel/releases/assets/$DEBUG_ASSET_ID",
+                "https://api.github.com/repos/talkcan-channels/debug",
+                "https://api.github.com/repos/talkcan-channels/debug/releases",
+                "https://api.github.com/repos/talkcan-channels/debug/releases/assets/$DEBUG_ASSET_ID",
             ),
             transport.requests.map { it.url },
         )
@@ -572,23 +572,23 @@ class GitHubSourceContractTest {
 
     private companion object {
         private val coordinates = GitHubRepositoryCoordinates("Owner", "Repository")
-        private val DIAGNOSTICS_COORDINATES = GitHubRepositoryCoordinates("talkcan", "diagnostics-channel")
-        private val DEBUG_COORDINATES = GitHubRepositoryCoordinates("talkcan", "debug-channel")
+        private val DIAGNOSTICS_COORDINATES = GitHubRepositoryCoordinates("talkcan-channels", "diagnostics")
+        private val DEBUG_COORDINATES = GitHubRepositoryCoordinates("talkcan-channels", "debug")
         private const val OFFICIAL_OWNER_ID = "1224006"
-        private const val DIAGNOSTICS_REPOSITORY_ID = "1305223892"
+        private const val DIAGNOSTICS_REPOSITORY_ID = "1313912734"
         private const val DIAGNOSTICS_RELEASE_ID = "359168468"
         private const val DIAGNOSTICS_ASSET_ID = "488185292"
         private const val DIAGNOSTICS_PUBLISHED_AT = "2026-07-24T08:22:32Z"
         private const val DIAGNOSTICS_PUBLISHED_EPOCH = 1784881352L
         private const val DIAGNOSTICS_SIZE = 5230L
-        private const val DIAGNOSTICS_SHA256 = "41e5d8f5e5ad49e321ab4a48c2794e795934bd7d64af78ab9f6e982949444cd0"
-        private const val DEBUG_REPOSITORY_ID = "1306065111"
+        private const val DIAGNOSTICS_SHA256 = "7a1f9363f5b7784fa238b334d5eb5a8815ed5fe2f742bf15b6db284dece525d2"
+        private const val DEBUG_REPOSITORY_ID = "1313907886"
         private const val DEBUG_RELEASE_ID = "359174403"
         private const val DEBUG_ASSET_ID = "488198107"
         private const val DEBUG_PUBLISHED_AT = "2026-07-24T08:36:00Z"
         private const val DEBUG_PUBLISHED_EPOCH = 1784882160L
         private const val DEBUG_SIZE = 7178L
-        private const val DEBUG_SHA256 = "960dedc7bf3eb1bbb2d29f465acc049671c22593611726a6f66951a977cc5b10"
+        private const val DEBUG_SHA256 = "ed3537b4c7d2806227ffdb28187d3cd8b3a34127cf9ad2f01d8b5de13c831594"
 
         private fun response(code: Int, body: String, headers: Map<String, String> = emptyMap()): FakeResponse =
             FakeResponse(code, body.toByteArray(), headers)

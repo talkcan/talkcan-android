@@ -4,7 +4,7 @@
 TBD - created by archiving change enable-lua-openai-agent-channel. Update Purpose after archive.
 ## Requirements
 ### Requirement: OpenAI Agent is an external source-only Lua package
-The Lua OpenAI Agent SHALL be published from the official `talkcan/openai-agent-channel` GitHub repository as a canonical `talkcan-channel.zip` stable release satisfying the current exact package-format-v1 contract. Its manifest SHALL bind to the host-resolved durable repository database ID, declare the exact Lua/API versions, profile type, dynamic resolver, `turns` work queue, resources, configuration, and required capabilities, and contain only `manifest.json` plus canonical UTF-8 Lua modules. The package SHALL not be bundled, automatically installed, specially registered, or resolved by mutable repository coordinates.
+The Lua OpenAI Agent SHALL be published from the official `talkcan-channels/openai-agent` GitHub repository as a canonical `talkcan-channel.zip` stable release satisfying the current exact package-format-v1 contract. Its manifest SHALL bind to the host-resolved durable repository database ID, declare the exact Lua/API versions, profile type, dynamic resolver, `turns` work queue, resources, configuration, and required capabilities, and contain only `manifest.json` plus canonical UTF-8 Lua modules. The package SHALL not be bundled, automatically installed, specially registered, or resolved by mutable repository coordinates.
 
 #### Scenario: Published artifact is inspected
 - **WHEN** the host inspects the official release asset

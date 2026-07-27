@@ -56,8 +56,8 @@ import org.junit.Test
  * the real [PackageManagementCoordinator] → [InstalledPackagesFacade] →
  * InstalledPackageStore → [ChannelImplementationProviderRegistry] chain.
  *
- * Provenance is the published talkcan/openai-agent-channel v1.0.7 release:
- * repository 1310575072, owner 1224006/talkcan, release 359437600, asset
+ * Provenance is the published talkcan-channels/openai-agent v1.0.7 release:
+ * repository 1313913383, owner 1224006/talkcan-channels, release 359437600, asset
  * 488626975. Official tier derives from exact owner-ID equality only; the provider
  * ID is derived from the numeric repository identity — there is no OpenAI-name
  * dispatch, no repository-name special case, no built-in collision, no automatic

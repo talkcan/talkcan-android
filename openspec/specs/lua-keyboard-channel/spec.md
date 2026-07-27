@@ -103,7 +103,7 @@ This change SHALL retain `builtin:keyboard`, its provider, catalogue seed, confi
 - **AND** neither runtime SHALL own, duplicate, or close the shared connection
 
 ### Requirement: External Keyboard package is published and verified as ordinary package data
-The official package SHALL be published from `talkcan/keyboard-channel` under the configured official owner identity, with its resolved positive immutable repository database ID in the manifest and one deterministic source-only `talkcan-channel.zip` release asset. Local candidate bytes SHALL pass the real validator, store, materializer, provider registry, catalogue, runtime registry, actor, and capability path before publication. Public acceptance SHALL record exact repository, release, asset, size, digest, and timestamp provenance and SHALL install the downloaded asset through the production package-management path.
+The official package SHALL be published from `talkcan-channels/keyboard` under the configured official owner identity, with its resolved positive immutable repository database ID in the manifest and one deterministic source-only `talkcan-channel.zip` release asset. Local candidate bytes SHALL pass the real validator, store, materializer, provider registry, catalogue, runtime registry, actor, and capability path before publication. Public acceptance SHALL record exact repository, release, asset, size, digest, and timestamp provenance and SHALL install the downloaded asset through the production package-management path.
 
 #### Scenario: Local candidate is validated before publication
 - **WHEN** deterministic candidate bytes are assembled
