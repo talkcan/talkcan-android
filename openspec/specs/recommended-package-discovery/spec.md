@@ -28,7 +28,7 @@ The recommended list SHALL contain the official Journal, Keyboard, OpenAI Agent,
 
 #### Scenario: List contains the five official packages
 - **WHEN** the recommended list is rendered
-- **THEN** it SHALL include Journal (`nilp0inter/journal-channel`), Keyboard (`nilp0inter/keyboard-channel`), OpenAI Agent (`nilp0inter/openai-agent-channel`), Debug (`nilp0inter/debug-channel`), and Diagnostics (`nilp0inter/diagnostics-channel`), each with its readable display name and canonical repository URL
+- **THEN** it SHALL include Journal (`talkcan/journal-channel`), Keyboard (`talkcan/keyboard-channel`), OpenAI Agent (`talkcan/openai-agent-channel`), Debug (`talkcan/debug-channel`), and Diagnostics (`talkcan/diagnostics-channel`), each with its readable display name and canonical repository URL
 
 #### Scenario: Recommended list is independent of installed state
 - **WHEN** one or more recommended packages are already installed
