@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Talkcan</string>
+    <string name="notification_channel_name">Talkcan device link</string>
+    <string name="notification_title">Talkcan connected</string>
+    <string name="notification_text">Monitoring B02PTT-FF01 serial and headset audio readiness.</string>
+    <string name="car_media_subtitle">Virtual push-to-talk</string>
+    <string name="car_media_ready_title">Talkcan ready</string>
+    <string name="car_media_recording_title">Talkcan recording</string>
+    <string name="car_media_finalizing_title">Talkcan finalizing</string>
+    <string name="car_media_not_ready_title">Talkcan not ready</string>
+    <string name="telecom_phone_account_description">Talkcan car push-to-talk</string>
+</resources>

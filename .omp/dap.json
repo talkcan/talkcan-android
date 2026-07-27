@@ -1,0 +1,17 @@
+{
+  "adapters": {
+    "talkcan-android-kotlin": {
+      "command": "talkcan-android-debug-adapter",
+      "languages": ["kotlin"],
+      "fileTypes": [".kt", ".kts"],
+      "rootMarkers": ["settings.gradle.kts", "build.gradle.kts"],
+      "attachDefaults": {
+        "request": "attach",
+        "projectRoot": ".",
+        "hostName": "127.0.0.1",
+        "port": 37099,
+        "timeout": 120000
+      }
+    }
+  }
+}

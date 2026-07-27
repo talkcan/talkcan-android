@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Talkcan / Android Auto now-playing bitmap — state: Ready.
+  Tinted with the muted Night Ops "surface" tone (#8B98A5 slate grey) per
+  design D6 / `android-auto-virtual-ptt` spec "dim surface color on Ready".
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="320dp"
+    android:viewportWidth="320"
+    android:viewportHeight="320">
+    <path
+        android:fillColor="#8B98A5"
+        android:strokeColor="#8B98A5"
+        android:strokeWidth="0"
+        android:strokeLineJoin="round"
+        android:pathData="M40,40 L280,40 L280,280 L40,280 Z" />
+    <path
+        android:strokeColor="#0B0F14"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M88,200 C108,116 132,116 152,200 S196,284 216,200 L232,168 L232,232 L264,232" />
+</vector>

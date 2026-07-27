@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Talkcan Half-Duplex Audio Verification Sheet</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    :root {
+      color-scheme: light;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      line-height: 1.3;
+    }
+    * { box-sizing: border-box; }
+    body { color: #111; margin: 0; }
+    h1 { font-size: 18pt; margin: 0 0 3mm; }
+    h2 { border-bottom: 1px solid #111; font-size: 12pt; margin: 6mm 0 2mm; padding-bottom: 1mm; }
+    h3 { font-size: 10pt; margin: 0; }
+    p { margin: 1.5mm 0; }
+    ol { margin: 1.5mm 0; padding-left: 5mm; }
+    li { margin: 1mm 0; }
+    .subtitle { margin: 0 0 4mm; }
+    .meta, .checks, .results { border-collapse: collapse; width: 100%; }
+    .meta th, .meta td, .checks th, .checks td, .results th, .results td {
+      border: 1px solid #222;
+      padding: 1.5mm;
+      text-align: left;
+      vertical-align: top;
+    }
+    .meta th { background: #eee; width: 20%; }
+    .checks th, .results th { background: #eee; }
+    .checks td:first-child { text-align: center; width: 7%; }
+    .checks td:nth-child(2) { width: 32%; }
+    .checks td:nth-child(3) { width: 38%; }
+    .checks td:nth-child(4) { width: 23%; }
+    .box { font-size: 13pt; line-height: 1; }
+    .line { border-bottom: 1px solid #111; display: inline-block; min-width: 42mm; height: 4mm; vertical-align: bottom; }
+    .notes { border: 1px solid #222; min-height: 28mm; padding: 2mm; white-space: pre-wrap; }
+    .small { font-size: 8.5pt; }
+    .page-break { break-before: page; page-break-before: always; }
+    .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Talkcan Half-Duplex Audio Verification</h1>
+  <p class="subtitle">Host-owned capture/playback admission, mode-selected output routing, queueing, PTT rejection, SOS, and teardown.</p>
+
+  <table class="meta">
+    <tr><th>Tester</th><td></td><th>Date / time</th><td></td></tr>
+    <tr><th>App build</th><td>Debug build installed by Gradle</td><th>Phone / Android</th><td>CPH2653 / Android 16</td></tr>
+    <tr><th>RSM connected</th><td>☐ Yes &nbsp; ☐ No</td><th>Car / Android Auto connected</th><td>☐ Yes &nbsp; ☐ No</td></tr>
+    <tr><th>Agent endpoint/model</th><td colspan="3"></td></tr>
+  </table>
+
+  <h2>Preconditions</h2>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Check</th><th>Expected result</th><th>Observed / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>Permissions granted</td><td>Microphone, Bluetooth, and notification requirements are granted.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>RSM path ready</td><td>Target RSM connects and Work mode can route audio through its headset SCO path.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Car path ready</td><td>Android Auto / car audio is available for On the road mode.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Phone path ready</td><td>Car disconnected; phone speaker is available for On a pinch mode.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Mode Routing: Debug ECHO</h2>
+  <p>For each row: select <strong>Debug → ECHO</strong>, hold PTT, speak a distinctive phrase, and release. Verify the <em>same captured audio</em> returns only after capture cleanup.</p>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Mode</th><th>Expected result</th><th>Observed endpoint / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>Work</td><td>Captured PCM returns through the target RSM. No capture/playback overlap.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>On the road</td><td>Captured PCM returns through car audio. No fallback to phone or RSM.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>On a pinch</td><td>Captured PCM returns through the phone speaker. No fallback to car or RSM.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Mode-at-admission</td><td>Record in one mode, change mode while ECHO is pending; output follows the mode selected when playback starts.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Mode Routing: Debug TTS and STT→TTS</h2>
+  <p>For each selected mode, perform one Debug TTS turn and one Debug STT→TTS turn.</p>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Scenario</th><th>Expected result</th><th>Observed / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>Debug TTS — Work / car / phone</td><td>Generated audio waits for terminal cleanup and plays through the respective RSM / car / phone endpoint.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Debug STT→TTS — Work / car / phone</td><td>Transcribed response waits for cleanup and uses the mode-selected endpoint.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Agent Queueing and Channel Selection</h2>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Scenario</th><th>Expected result</th><th>Observed / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>Response during recording</td><td>An agent response becoming ready during active capture stays pending; it starts only after terminal cleanup.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Inactive-channel response</td><td>A response for an unselected channel remains pending, unheard, and never routes to the selected channel.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Same-channel reselection</td><td>Deliberately reselecting that channel resumes its queue in FIFO order without starting a new PTT session.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Pause persistence</td><td>After SOS pauses response playback, mode changes and navigation do not resume it; explicit reselection of the same channel does.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+  <h2>PTT Rejection During Audible Playback</h2>
+  <p>Start a sufficiently long Debug or agent response. Press PTT repeatedly while the response is audibly playing.</p>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Check</th><th>Expected result</th><th>Observed / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>Speech continuity</td><td>Existing response content continues; no stop, restart, second route, or new capture begins.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Rejection cue</td><td>One brief two-tone cue ducks and overlays the existing output stream on its same endpoint.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Debounce</td><td>Repeated rejected presses while a cue is active do not stack additional cues.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Release is inert</td><td>Releasing rejected PTT does not stop playback, alter mode, or terminate a later capture session.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h2>SOS Semantics</h2>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Scenario</th><th>Expected result</th><th>Observed / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>SOS during active response playback</td><td>Playback stops; its channel queue is paused/pending; no conversation reset occurs.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Reselect after active SOS</td><td>Explicitly reselecting the same channel resumes queued response playback.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>SOS while idle</td><td>Existing selected-runtime SOS/reset behavior remains unchanged.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h2>RSM Announcements and Endpoint Failure</h2>
+  <table class="checks">
+    <thead><tr><th>Pass</th><th>Scenario</th><th>Expected result</th><th>Observed / note</th></tr></thead>
+    <tbody>
+      <tr><td class="box">☐</td><td>RSM Control announcements</td><td>Channel selection and boundary feedback use RSM output and do not overlap active capture or response playback.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Endpoint loss</td><td>Disconnect active output during playback. Playback fails closed; it does not fall back across Work, car, and phone modes.</td><td></td></tr>
+      <tr><td class="box">☐</td><td>Foreground teardown</td><td>Disconnect serial / stop monitoring during audio. Playback stops, foreground notification disappears, and the app remains responsive.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Result</h2>
+  <table class="results">
+    <tr><th style="width: 25%;">Overall result</th><td>☐ Pass &nbsp;&nbsp; ☐ Fail &nbsp;&nbsp; ☐ Blocked by hardware/account</td></tr>
+    <tr><th>Failed steps</th><td></td></tr>
+    <tr><th>Required evidence</th><td>For each failure: mode, channel, expected endpoint, actual endpoint, whether capture/playback overlapped, and relevant timestamp.</td></tr>
+  </table>
+
+  <h2>Free-form Notes / Failure Record</h2>
+  <div class="notes">
+Step:
+Mode:
+Channel:
+Expected endpoint:
+Actual endpoint:
+Capture/playback overlap: ☐ Yes ☐ No
+Timestamp:
+Details:
+
+
+
+  </div>
+</body>
+</html>

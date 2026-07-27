@@ -1,0 +1,5 @@
+[versions]
+luajava = "4.1.0"
+
+[libraries]
+luajava-lua54 = { module = "party.iroiro.luajava:lua54", version.ref = "luajava" }

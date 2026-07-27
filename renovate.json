@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "dependencyDashboard": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "matchManagers": ["nix"],
+      "groupName": "Nix flake inputs",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "matchManagers": ["gradle", "gradle-wrapper"],
+      "groupName": "Gradle / Maven",
+      "schedule": ["before 6am on monday"]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+.DS_Store
+.gradle/
+.kotlin/
+build/
+local.properties
+.android/
+.opencode
+.omo
+release.keystore
+*.keystore
+.wrangler/
+.direnv
+/result

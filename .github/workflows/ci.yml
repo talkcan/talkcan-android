@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Build & Test (Nix)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@629b284231c2a82554b724e357e47fc6020833c8 # v3.21.2
+
+      - name: Enable FlakeHub Cache
+        uses: DeterminateSystems/flakehub-cache-action@9926dde74484ccb2224835b80531de64ed4336ef # v3.21.2
+
+      - name: Validate flake
+        run: nix flake check --no-write-lock-file
+
+      - name: Verify devshell toolchain
+        run: nix develop --no-write-lock-file -c gradle --version
+
+      - name: Provision debug keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p .android
+          printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > .android/debug.keystore
+          test -s .android/debug.keystore
+
+      - name: Run JVM tests
+        run: nix develop --no-write-lock-file -c gradle test
+
+      - name: Assemble debug APK
+        run: nix develop --no-write-lock-file -c gradle assembleDebug
+
+      - name: Record APK evidence
+        run: |
+          echo "## Debug APK artifacts" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| File | SHA-256 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          find app/build/outputs/apk/debug -name '*.apk' -type f -exec sha256sum {} \; | \
+            while read -r hash file; do
+              echo "| \`$(basename "$file")\` | \`$hash\` |" >> "$GITHUB_STEP_SUMMARY"
+            done
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: talkcan-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
