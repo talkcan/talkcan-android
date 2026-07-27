@@ -1,0 +1,9 @@
+schema: spec-driven
+context: |
+  Talkcan — a hardware-first, voice-first push-to-talk channel router for Android.
+  Tech stack: Kotlin, Jetpack Compose, Android (minSdk 31 / targetSdk 35), Gradle (Kotlin DSL), Nix flake devshell.
+  Application id and Kotlin namespace: io.talkcan (reverse-DNS of the talkcan.io domain).
+  Voice channels are external Lua plugin packages. The host injects a Lua runtime exposing modules under the `talkcan.*` namespace (talkcan.channel, talkcan.runtime, talkcan.fs, talkcan.audio, talkcan.transcription, talkcan.synthesis, talkcan.playback, talkcan.log, talkcan.secrets, talkcan.http, talkcan.json, talkcan.work, talkcan.keyboard_output, talkcan.profiles). Lua API version string: talkcan-lua-v1.
+  Official channel packages are published from the talkcan-channels GitHub org (e.g. talkcan-channels/openai-agent); the application repo is talkcan/talkcan-android. A plugin is "Official" when published from the talkcan or talkcan-channels org; everything else is "Community — Unreviewed".
+  Primary hardware target: B02PTT-FF01 Bluetooth PTT device.
+  Brand voice (see Talkcan_Brand_Community_Agent_Playbook.md): ordinary words before jargon; lead with state or action; dry humor; never joke about trust, safety, privacy, or data loss; no hype or superlatives. Product name "Talkcan" in prose, "talkcan" in handles/ids; never "TalkCan" or the former name.
