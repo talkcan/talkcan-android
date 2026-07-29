@@ -662,7 +662,9 @@ class PackageResolverRuntimeTest {
         )
         factory.publish(publication())
         val first = async(Dispatchers.Default) { factory.resolve(request()) }
-        repeat(50) { yield() }
+        withTimeout(5_000) {
+            while (bridge.createCount < 1) delay(10)
+        }
         val second = factory.resolve(request(callerRequestId = "req-2"))
         assertEquals(
             unavailable(DynamicConfigurationChoiceUnavailableReason.RESOLUTION_TIMED_OUT),
