@@ -66,8 +66,14 @@ jobs:
           nix develop --no-write-lock-file -c bash -c '
             APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
             "$APKSIGNER" verify --verbose --print-certs \
-              app/build/outputs/apk/release/*.apk | tee /tmp/sig.out
-            grep -E "Verified" /tmp/sig.out
+              app/build/outputs/apk/release/*.apk > /tmp/sig.out
+            cat /tmp/sig.out
+            grep -Fqx \
+              "Verified using v2 scheme (APK Signature Scheme v2): true" \
+              /tmp/sig.out
+            grep -Fqx \
+              "Verified using v3 scheme (APK Signature Scheme v3): true" \
+              /tmp/sig.out
           '
 
       - name: Upload release APK

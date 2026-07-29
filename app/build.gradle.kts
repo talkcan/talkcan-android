@@ -55,6 +55,8 @@ android {
                 storePassword = requireNotNull(releaseKeystorePassword)
                 keyAlias = "talkcan-release"
                 keyPassword = requireNotNull(releaseKeyPassword)
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
