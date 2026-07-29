@@ -17,7 +17,7 @@ published to GitHub Releases, with operator procedures documented in
 
 - **WHEN** `gradle assembleRelease` is invoked with all three environment variables set and `ANDROID_RELEASE_KEYSTORE_PATH` pointing at a valid keystore file
 - **THEN** the build produces `app/build/outputs/apk/release/app-release.apk`
-- **AND** `apksigner verify --verbose` reports successful verification under APK Signature Scheme v2 and v3
+- **AND** `apksigner verify --verbose --min-sdk-version 24` reports successful verification under APK Signature Scheme v2 and v3
 
 #### Scenario: Release build produces unsigned APK when environment is absent
 
@@ -79,11 +79,11 @@ The release workflow SHALL decode `ANDROID_DEBUG_KEYSTORE_BASE64` to `.android/d
 
 ### Requirement: The release workflow SHALL verify the APK signature before publishing
 
-After `gradle assembleRelease`, the workflow SHALL run `apksigner verify --verbose --print-certs` against the produced APK. The workflow SHALL fail if `apksigner` does not report successful verification under APK Signature Scheme v2 and v3. Publishing SHALL NOT occur for an unverified or unsigned APK.
+After `gradle assembleRelease`, the workflow SHALL run `apksigner verify --verbose --print-certs --min-sdk-version 24` against the produced APK. The API 24 verification floor SHALL force `apksigner` to evaluate both embedded v2 and v3 signing blocks without changing the APK's declared API 31 minimum. The workflow's inner shell SHALL use fail-fast semantics, and the workflow SHALL fail if either exact v2 or v3 success line is absent. Publishing SHALL NOT occur for an unverified or unsigned APK.
 
 #### Scenario: Verified APK is published
 
-- **WHEN** `apksigner verify --verbose` reports v2 and v3 scheme verification success
+- **WHEN** `apksigner verify --verbose --min-sdk-version 24` reports v2 and v3 scheme verification success
 - **THEN** the workflow proceeds to the "Publish GitHub Release" step
 - **AND** a GitHub Release is created with the APK as an asset
 

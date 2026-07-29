@@ -158,8 +158,11 @@ To rotate the GPG signing key (e.g., new Yubikey, new subkey):
 10. Verify the APK signature locally:
     ```sh
     gh release download v<versionName> --pattern '*.apk' --dir /tmp/release-check
-    apksigner verify --verbose /tmp/release-check/*.apk
+    apksigner verify --verbose --print-certs --min-sdk-version 24 \
+      /tmp/release-check/*.apk
     ```
+    The API 24 verification floor makes `apksigner` evaluate both embedded
+    v2 and v3 signing blocks. It does not change the APK's API 31 minimum.
 11. Smoke-test on `B02PTT-FF01` per the `AGENTS.md` manual acceptance
     flow: PTT press/release, Group → Control mode, Volume Up/Down in
     Control mode, echo with headset routing, foreground-service

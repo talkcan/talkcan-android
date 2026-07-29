@@ -63,9 +63,10 @@ jobs:
 
       - name: Verify APK signature
         run: |
-          nix develop --no-write-lock-file -c bash -c '
+          nix develop --no-write-lock-file -c bash -euo pipefail -c '
             APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
             "$APKSIGNER" verify --verbose --print-certs \
+              --min-sdk-version 24 \
               app/build/outputs/apk/release/*.apk > /tmp/sig.out
             cat /tmp/sig.out
             grep -Fqx \
