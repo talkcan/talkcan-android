@@ -4,6 +4,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
 }
 
+allprojects {
+    tasks.withType<Test>().configureEach {
+        if (providers.environmentVariable("CI").isPresent) {
+            testLogging {
+                events("started", "failed", "skipped")
+            }
+        }
+    }
+}
+
 tasks.register<Test>("test") {
     group = "verification"
     description = "Runs unit tests from subprojects."

@@ -18,6 +18,7 @@ jobs:
   android:
     name: Build & Test (Nix)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -43,6 +44,7 @@ jobs:
           test -s .android/debug.keystore
 
       - name: Run JVM tests
+        timeout-minutes: 20
         run: nix develop --no-write-lock-file -c gradle test
 
       - name: Assemble debug APK
