@@ -14,7 +14,7 @@ class ChannelCardPresentationTest {
                 isAvailable = true,
                 isPttActive = false,
                 isLocked = false,
-                expectedLabel = "ACTIVE",
+                expectedLabel = "Selected",
                 expectedTone = ChannelCardTone.Primary,
             ),
             Case(
@@ -23,7 +23,7 @@ class ChannelCardPresentationTest {
                 isAvailable = false,
                 isPttActive = false,
                 isLocked = false,
-                expectedLabel = "ACTIVE",
+                expectedLabel = "Selected",
                 expectedTone = ChannelCardTone.Primary,
             ),
             Case(
@@ -32,7 +32,7 @@ class ChannelCardPresentationTest {
                 isAvailable = true,
                 isPttActive = false,
                 isLocked = false,
-                expectedLabel = "READY",
+                expectedLabel = "Ready",
                 expectedTone = ChannelCardTone.Secondary,
             ),
             Case(
@@ -41,7 +41,7 @@ class ChannelCardPresentationTest {
                 isAvailable = false,
                 isPttActive = false,
                 isLocked = false,
-                expectedLabel = "UNAVAILABLE",
+                expectedLabel = "Unavailable",
                 expectedTone = ChannelCardTone.Secondary,
             ),
             Case(
@@ -50,7 +50,7 @@ class ChannelCardPresentationTest {
                 isAvailable = false,
                 isPttActive = true,
                 isLocked = false,
-                expectedLabel = "PTT",
+                expectedLabel = "Recording",
                 expectedTone = ChannelCardTone.Secondary,
             ),
             Case(
@@ -59,7 +59,7 @@ class ChannelCardPresentationTest {
                 isAvailable = false,
                 isPttActive = true,
                 isLocked = true,
-                expectedLabel = "LOCKED",
+                expectedLabel = "Locked",
                 expectedTone = ChannelCardTone.Secondary,
             ),
         )

@@ -15,10 +15,10 @@ enum class VuZone {
     /** Bottom of the scale: input is too low. Rendered dim/muted (secondary text at low opacity). */
     LOW,
 
-    /** Middle of the scale: healthy level. Rendered in the transmit color (TalkcanCyan / CommandGold). */
+    /** Middle of the scale: healthy level. Rendered in Talkcan signal green. */
     GOOD,
 
-    /** Top of the scale: input is too high / clipping. Rendered in AlertAmber. */
+    /** Top of the scale: input is too high / clipping. Rendered in can red. */
     CLIP,
 }
 

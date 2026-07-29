@@ -1,20 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Talkcan / Android Auto now-playing bitmap — state: NotReady.
-  Tinted with the "outline" tone per VISUAL_IDENTITY.md (Night Ops muted surface
-  #1A1F26 hollow with #8B98A5 slate stroke). The car now-playing card renders
-  this when permissions/SPP/SCO are not ready.
-  See design D6 / `android-auto-virtual-ptt` spec.
--->
+<!-- Talkcan Android Auto art: setup required. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="320dp"
     android:height="320dp"
     android:viewportWidth="320"
     android:viewportHeight="320">
     <path
-        android:strokeColor="#8B98A5"
-        android:strokeWidth="8"
-        android:strokeLineJoin="round"
         android:fillColor="@android:color/transparent"
-        android:pathData="M40,40 L280,40 L280,280 L40,280 Z M88,200 C108,116 132,116 152,200 S196,284 216,200 L232,168 L232,232 L264,232" />
+        android:pathData="M50,55 Q50,40 65,40 L135,40 Q150,40 150,55 L150,210 Q150,225 135,225 L65,225 Q50,225 50,210 Z M135,210 L190,195 M190,195 L260,85 M190,195 L270,190 M190,195 L245,270"
+        android:strokeColor="#B9C0C8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="12" />
+    <path
+        android:fillColor="#B9C0C8"
+        android:pathData="M260,70 A15,15 0,1 1,260 100 A15,15 0,1 1,260 70 M270,175 A15,15 0,1 1,270 205 A15,15 0,1 1,270 175 M245,255 A15,15 0,1 1,245 285 A15,15 0,1 1,245 255" />
 </vector>

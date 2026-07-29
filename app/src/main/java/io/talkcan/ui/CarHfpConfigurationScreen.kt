@@ -45,7 +45,7 @@ fun CarHfpConfigurationScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Car headset configuration") },
+                title = { Text("Car headset") },
                 navigationIcon = {
                     IconButton(onClick = actions::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -59,38 +59,58 @@ fun CarHfpConfigurationScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            TerminalHeader(
+                title = "Connect your car",
+                subtitle = "Select your car's call-audio profile so Talkcan routes voice through it.",
+            )
+
             ConfiguredCarCard(state)
             state.selectionFailure?.let { failure ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        text = failure.message(),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    Column(
                         modifier = Modifier.padding(16.dp),
-                    )
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        TalkcanSectionHeader(title = "Selection failed")
+                        Text(
+                            text = failure.message(),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
                 }
             }
-            Text("CONNECTED HFP DEVICES", style = MaterialTheme.typography.titleMedium)
+
+            TalkcanSectionHeader(
+                title = "Connected devices",
+                supportingText = "Pick the car's headset profile from devices currently paired over Bluetooth.",
+            )
             InspectionGuidance(state)
             state.candidates.forEach { candidate ->
                 CandidateRow(candidate, actions::selectCarHfpCandidate)
             }
-            OutlinedButton(
-                onClick = actions::refreshCarHfpConfiguration,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Retry device inspection")
-            }
-            OutlinedButton(
-                onClick = actions::openBluetoothSettings,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Open Bluetooth settings")
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = actions::refreshCarHfpConfiguration,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Retry device inspection")
+                }
+                OutlinedButton(
+                    onClick = actions::openBluetoothSettings,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open Bluetooth settings")
+                }
             }
         }
     }
@@ -100,34 +120,45 @@ fun CarHfpConfigurationScreen(
 private fun ConfiguredCarCard(state: CarHfpConfigurationState) {
     val configured = state.configuredCar
     Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("CONFIGURED CAR", style = MaterialTheme.typography.titleMedium)
+            TalkcanSectionHeader(title = "Current car")
             if (configured == null) {
-                Text("No car configured", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "No car configured",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     "Connect the car's call-audio profile, then select it below.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                Text(configured.label, style = MaterialTheme.typography.titleLarge)
                 Text(
-                    when (configured.status) {
-                        ConfiguredCarStatus.Connected -> "Connected for HFP calls"
-                        ConfiguredCarStatus.Unavailable -> "Configured, but currently unavailable"
-                        ConfiguredCarStatus.TargetRsmConflict -> "Invalid: this device is the target RSM"
-                    },
-                    color = when (configured.status) {
-                        ConfiguredCarStatus.Connected -> MaterialTheme.colorScheme.primary
-                        ConfiguredCarStatus.Unavailable,
-                        ConfiguredCarStatus.TargetRsmConflict -> MaterialTheme.colorScheme.error
-                    },
+                    configured.label,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                 )
+                val tone = when (configured.status) {
+                    ConfiguredCarStatus.Connected -> TalkcanStatusTone.Ready
+                    ConfiguredCarStatus.Unavailable -> TalkcanStatusTone.Attention
+                    ConfiguredCarStatus.TargetRsmConflict -> TalkcanStatusTone.Error
+                }
+                val statusLabel = when (configured.status) {
+                    ConfiguredCarStatus.Connected -> "Connected for HFP calls"
+                    ConfiguredCarStatus.Unavailable -> "Configured, but currently unavailable"
+                    ConfiguredCarStatus.TargetRsmConflict -> "Invalid: this device is the target RSM"
+                }
+                TalkcanStatusBadge(label = statusLabel, tone = tone)
             }
         }
     }
@@ -149,13 +180,31 @@ private fun InspectionGuidance(state: CarHfpConfigurationState) {
             "Android could not inspect connected headset devices. Retry or reopen Bluetooth settings."
     }
     guidance?.let {
-        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(18.dp),
+            )
+        }
     }
 }
 
 @Composable
 private fun CandidateRow(candidate: CarHfpCandidate, onSelect: (String) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -167,12 +216,16 @@ private fun CandidateRow(candidate: CarHfpCandidate, onSelect: (String) -> Unit)
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(candidate.label, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    candidate.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 if (candidate.selected) {
                     Text(
                         "Selected car",
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }

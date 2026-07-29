@@ -45,8 +45,8 @@ fun ConnectionScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
-            title = "TALKCAN LINK",
-            subtitle = "Bluetooth Classic SPP + HFP/SCO validation terminal",
+            title = "Connect your radio",
+            subtitle = "Pair your Talkcan radio, then confirm its talk and audio paths.",
         )
 
         StatusPanel(state)
@@ -58,18 +58,39 @@ fun ConnectionScreen(
 @Composable
 private fun StatusPanel(state: ConnectionState) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (state.readyForMonitor) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("READINESS MATRIX", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(12.dp))
-            StatusRow("Android Bluetooth", if (state.bluetoothEnabled) "on" else "off")
-            StatusRow("Target device", state.devicePresence.displayText())
-            StatusRow("Serial control channel", state.spp.displayText(state.sppError))
-            StatusRow("Headset audio capability", state.headsetAudio.displayText())
-            StatusRow("Overall readiness", if (state.readyForMonitor) "ready" else "not ready")
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(
+                title = "Connection check",
+                supportingText = "Everything Talkcan needs from your radio.",
+            )
+            TalkcanStatusBadge(
+                label = if (state.readyForMonitor) "Radio ready" else "Setup needed",
+                tone = if (state.readyForMonitor) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
+            )
+            StatusRow("Bluetooth", if (state.bluetoothEnabled) "On" else "Off")
+            StatusRow("Radio", state.devicePresence.displayText())
+            StatusRow("Talk button", state.spp.displayText(state.sppError))
+            StatusRow("Headset audio", state.headsetAudio.displayText())
         }
     }
 }
@@ -93,13 +114,16 @@ private fun GuidancePanel(state: ConnectionState) {
     }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(16.dp),
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(18.dp),
         )
     }
 }
@@ -107,6 +131,10 @@ private fun GuidancePanel(state: ConnectionState) {
 @Composable
 private fun ActionPanel(state: ConnectionState, actions: PttUiActions) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        TalkcanSectionHeader(
+            title = "Next step",
+            supportingText = "Talkcan only shows actions that apply right now.",
+        )
         if (!state.bluetoothEnabled || state.devicePresence == DevicePresence.PairingFailed ||
             state.headsetAudio == HeadsetAudioState.Unavailable
         ) {
@@ -158,9 +186,13 @@ private fun StatusRow(label: String, value: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TerminalHeader(title: String, subtitle: String, onLongPress: (() -> Unit)? = null) {
+fun TerminalHeader(
+    title: String,
+    subtitle: String,
+    onLongPress: (() -> Unit)? = null,
+) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = if (onLongPress != null) {
             Modifier.combinedClickable(
                 onClick = {},
@@ -170,8 +202,19 @@ fun TerminalHeader(title: String, subtitle: String, onLongPress: (() -> Unit)? =
             Modifier
         },
     ) {
-        Text(title, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TalkcanBrandLabel()
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -104,14 +103,12 @@ internal fun VoiceProfileManagementScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "VOICE PROFILE MIXER & CATALOGUE",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+        TerminalHeader(
+            title = "Voice profiles",
+            subtitle = "Mix sources, apply latent operations, preview, and manage saved profiles.",
         )
 
         editorState.failure?.let { failure ->
@@ -241,7 +238,7 @@ internal fun VoiceProfileManagementScreen(
                     pendingSourceSelection = null
                     onSelectSources(targetIds, true)
                 }) {
-                    Text("Discard & Continue")
+                    Text("Discard and continue")
                 }
             },
             dismissButton = {
@@ -263,7 +260,7 @@ internal fun VoiceProfileManagementScreen(
                     pendingWeightAction = null
                     invokeAction()
                 }) {
-                    Text("Discard & Continue")
+                    Text("Discard and continue")
                 }
             },
             dismissButton = {
@@ -278,14 +275,14 @@ internal fun VoiceProfileManagementScreen(
         var importName by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { importDialogOpen = false },
-            title = { Text("Import Voice Profile") },
+            title = { Text("Import voice profile") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Enter a display name for the imported JSON document.")
                     OutlinedTextField(
                         value = importName,
                         onValueChange = { importName = it },
-                        label = { Text("Display Name") },
+                        label = { Text("Display name") },
                         singleLine = true,
                     )
                 }
@@ -300,7 +297,7 @@ internal fun VoiceProfileManagementScreen(
                     },
                     enabled = importName.isNotBlank(),
                 ) {
-                    Text("Select JSON File")
+                    Text("Select JSON file")
                 }
             },
             dismissButton = {
@@ -324,15 +321,15 @@ internal fun VoiceProfileManagementScreen(
         }
         AlertDialog(
             onDismissRequest = { saveAsNewDialogOpen = false },
-            title = { Text("Save Custom Profile As New") },
+            title = { Text("Save as new profile") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Immediate sources: ${summaryLines.joinToString(", ")}")
+                    Text("Sources: ${summaryLines.joinToString(", ")}")
                     Text("Latent operations applied: ${editorState.draft?.operationCount ?: 0}")
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },
-                        label = { Text("Display Name") },
+                        label = { Text("Display name") },
                         singleLine = true,
                     )
                 }
@@ -347,7 +344,7 @@ internal fun VoiceProfileManagementScreen(
                     },
                     enabled = newName.isNotBlank(),
                 ) {
-                    Text("Save Profile")
+                    Text("Save profile")
                 }
             },
             dismissButton = {
@@ -362,7 +359,7 @@ internal fun VoiceProfileManagementScreen(
         var renameText by remember(target) { mutableStateOf(target.displayName) }
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("Rename Profile") },
+            title = { Text("Rename profile") },
             text = {
                 OutlinedTextField(
                     value = renameText,
@@ -397,7 +394,7 @@ internal fun VoiceProfileManagementScreen(
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete Profile '${target.displayName}'?") },
+            title = { Text("Delete profile '${target.displayName}'?") },
             text = { Text("This will remove the custom profile from storage. If channels depend on it, deletion will be refused.") },
             confirmButton = {
                 Button(onClick = {
@@ -423,7 +420,9 @@ private fun FailureBanner(
     onDismiss: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -462,19 +461,21 @@ private fun MixerSection(
     val normalizedWeights = editorState.normalizedWeights
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "PRIMARY MIXER SOURCES (${selectedIds.size} selected)",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+            TalkcanSectionHeader(
+                title = "Mix sources",
+                supportingText = "${selectedIds.size} selected.",
             )
 
             if (selectedIds.size < 2) {
@@ -583,19 +584,21 @@ private fun HeatmapSection(
     val contentDesc = remember(ttl) { VoiceProfileManagementUiHelpers.ttlHeatmapAccessibilityDescription(ttl) }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "TTL HEATMAP [1, 50, 256]",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+            TalkcanSectionHeader(
+                title = "TTL heatmap",
+                supportingText = "Shape [1, 50, 256].",
             )
             Text(
                 text = String.format("Min: %.3f | Max: %.3f", min, max),
@@ -619,13 +622,13 @@ private fun HeatmapSection(
                     onClick = { onApplyOperation(VoiceProfileTtlOperation.SeededFeatureRoll(1001L)) },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Shift Feature (+10)")
+                    Text("Shift feature (+10)")
                 }
                 OutlinedButton(
                     onClick = { onApplyOperation(VoiceProfileTtlOperation.SeededTimeRoll(2002L)) },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Shift Time (+5)")
+                    Text("Shift time (+5)")
                 }
             }
         }
@@ -654,24 +657,21 @@ private fun OperationsSection(
     var jitterSeed by remember { mutableStateOf("3003") }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "ADVANCED LATENT OPERATIONS",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "Operations modify only the TTL tensor while retaining the mixed DP tensor.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary,
+            TalkcanSectionHeader(
+                title = "Latent operations",
+                supportingText = "Operations modify only the TTL tensor while retaining the mixed DP tensor.",
             )
 
             Row(
@@ -690,7 +690,7 @@ private fun OperationsSection(
                     enabled = hasEdits,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Reset Baseline")
+                    Text("Reset baseline")
                 }
             }
 
@@ -699,11 +699,11 @@ private fun OperationsSection(
                 OutlinedButton(
                     onClick = { onApplyOperation(VoiceProfileTtlOperation.FeatureMirror) },
                     modifier = Modifier.weight(1f),
-                ) { Text("Feature Mirror") }
+                ) { Text("Feature mirror") }
                 OutlinedButton(
                     onClick = { onApplyOperation(VoiceProfileTtlOperation.TimeMirror) },
                     modifier = Modifier.weight(1f),
-                ) { Text("Time Mirror") }
+                ) { Text("Time mirror") }
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -786,7 +786,7 @@ private fun OperationsSection(
                 OutlinedTextField(
                     value = featRollSeed,
                     onValueChange = { featRollSeed = it },
-                    label = { Text("Feat Roll") },
+                    label = { Text("Feat roll") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
@@ -794,12 +794,12 @@ private fun OperationsSection(
                     featRollSeed.toLongOrNull()?.let {
                         onApplyOperation(VoiceProfileTtlOperation.SeededFeatureRoll(it))
                     }
-                }) { Text("F. Roll") }
+                }) { Text("F. roll") }
 
                 OutlinedTextField(
                     value = timeRollSeed,
                     onValueChange = { timeRollSeed = it },
-                    label = { Text("Time Roll") },
+                    label = { Text("Time roll") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
@@ -807,7 +807,7 @@ private fun OperationsSection(
                     timeRollSeed.toLongOrNull()?.let {
                         onApplyOperation(VoiceProfileTtlOperation.SeededTimeRoll(it))
                     }
-                }) { Text("T. Roll") }
+                }) { Text("T. roll") }
             }
 
             Row(
@@ -844,7 +844,7 @@ private fun OperationsSection(
                 OutlinedTextField(
                     value = tremoloDepth,
                     onValueChange = { tremoloDepth = it },
-                    label = { Text("Trem Depth") },
+                    label = { Text("Trem depth") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
@@ -890,26 +890,28 @@ private fun PreviewSection(
     val previewState = editorState.preview
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "PREVIEW & SAVE DRAFT",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+            TalkcanSectionHeader(
+                title = "Preview and save",
+                supportingText = "Test the draft, then save it as a new profile.",
             )
 
-            val statusLabel = when (previewState.phase) {
-                VoiceProfilePreviewPhase.IDLE -> "IDLE"
-                VoiceProfilePreviewPhase.SYNTHESIZING -> "SYNTHESIZING"
-                VoiceProfilePreviewPhase.PLAYING -> "PLAYING"
-                VoiceProfilePreviewPhase.ERROR -> "ERROR"
+            val (statusLabel, statusTone) = when (previewState.phase) {
+                VoiceProfilePreviewPhase.IDLE -> "Idle" to TalkcanStatusTone.Neutral
+                VoiceProfilePreviewPhase.SYNTHESIZING -> "Synthesizing" to TalkcanStatusTone.Active
+                VoiceProfilePreviewPhase.PLAYING -> "Playing" to TalkcanStatusTone.Active
+                VoiceProfilePreviewPhase.ERROR -> "Error" to TalkcanStatusTone.Error
             }
 
             val routeLabel = if (previewState.targetMode != null && previewState.targetEndpoint != null) {
@@ -918,12 +920,21 @@ private fun PreviewSection(
                 "Default route"
             }
 
-            Text(
-                text = "Status: $statusLabel | Active Route: $routeLabel",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                color = if (previewState.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TalkcanStatusBadge(
+                    label = statusLabel,
+                    tone = statusTone,
+                )
+                Text(
+                    text = "Route: $routeLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             previewState.diagnostic?.let { diag ->
                 Text(
@@ -950,14 +961,14 @@ private fun PreviewSection(
                     enabled = editorState.draft != null && !previewState.active,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Preview Draft")
+                    Text("Preview")
                 }
                 OutlinedButton(
                     onClick = onCancelPreview,
                     enabled = previewState.active,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Cancel Preview")
+                    Text("Cancel")
                 }
             }
 
@@ -966,7 +977,7 @@ private fun PreviewSection(
                 enabled = editorState.draft != null,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Save as New Custom Profile")
+                Text("Save as new profile")
             }
         }
     }
@@ -988,25 +999,18 @@ private fun CatalogueSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "VOICE PROFILE CATALOGUE",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-
-            OutlinedButton(onClick = onOpenImport) {
-                Text("Import Profile (JSON)")
-            }
-        }
+        TalkcanSectionHeader(
+            title = "Catalogue",
+            supportingText = "Built-in, edited, and imported voice profiles.",
+            actionLabel = "Import",
+            onAction = onOpenImport,
+        )
 
         groups.visibleSections.forEach { (sectionTitle, profiles) ->
+            val sentenceCaseTitle = sectionTitle.lowercase()
+                .replaceFirstChar { it.uppercase() }
             Text(
-                text = sectionTitle,
+                text = sentenceCaseTitle,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -1041,7 +1045,10 @@ private fun ProfileCard(
     val desc = remember(summary) { VoiceProfileManagementUiHelpers.profileAccessibilityDescription(summary) }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .semantics { contentDescription = desc },

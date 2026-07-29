@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.talkcan.dependency.PackageConfigurationLimits
@@ -49,6 +50,7 @@ import io.talkcan.model.DynamicConfigurationChoice
 import io.talkcan.model.DynamicConfigurationChoiceResolution
 import io.talkcan.model.DynamicConfigurationChoiceResolver
 import io.talkcan.model.OpaqueJsonObject
+import io.talkcan.resource.MountAvailability
 import org.json.JSONObject
 
 /**
@@ -113,7 +115,7 @@ fun ChannelConfigurationScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -127,9 +129,14 @@ fun ChannelConfigurationScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            TerminalHeader(
+                title = title,
+                subtitle = "Review and adjust the settings below, then save your changes.",
+            )
+
             if (descriptor.configurationFields.isEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -138,34 +145,50 @@ fun ChannelConfigurationScreen(
                     ),
                 ) {
                     Text(
-                        text = "No configuration required.",
+                        text = "No configuration required",
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
-                descriptor.configurationFields.forEach { field ->
-                    if (field.isVisible(values)) {
-                        ChannelConfigurationFieldEditor(
-                            field = field,
-                            configurationOwnerId = configurationOwnerId,
-                            value = values[field.id],
-                            dependencyValue = (field as? ChannelConfigurationField.DynamicChoiceField)
-                                ?.dependsOnFieldId
-                                ?.let(values::get),
-                            choiceResolver = choiceResolver,
-                            onValueChange = { newValue ->
-                                applyExplicitFieldEdit(
-                                    descriptor.configurationFields,
-                                    values,
-                                    field.id,
-                                    newValue,
-                                )
-                                submissionError = null
-                            },
-                            onPickDirectory = onPickDirectory,
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        TalkcanSectionHeader(
+                            title = "Channel settings",
+                            supportingText = "Values required by this channel provider.",
                         )
+                        descriptor.configurationFields.forEach { field ->
+                            if (field.isVisible(values)) {
+                                ChannelConfigurationFieldEditor(
+                                    field = field,
+                                    configurationOwnerId = configurationOwnerId,
+                                    value = values[field.id],
+                                    dependencyValue = (field as? ChannelConfigurationField.DynamicChoiceField)
+                                        ?.dependsOnFieldId
+                                        ?.let(values::get),
+                                    choiceResolver = choiceResolver,
+                                    onValueChange = { newValue ->
+                                        applyExplicitFieldEdit(
+                                            descriptor.configurationFields,
+                                            values,
+                                            field.id,
+                                            newValue,
+                                        )
+                                        submissionError = null
+                                    },
+                                    onPickDirectory = onPickDirectory,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -182,28 +205,61 @@ fun ChannelConfigurationScreen(
             }
 
             if (mountEntries.isNotEmpty()) {
-                mountEntries.forEach { entry ->
-                    ResourceMountEditorRow(
-                        entry = entry,
-                        onPickMount = {
-                            onPickMount(
-                                MountSelectionRequest(
-                                    ownerInstanceId = configurationOwnerId,
-                                    implementationId = descriptor.implementationId,
-                                    declarationId = entry.declaration.declarationId,
-                                ),
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        TalkcanSectionHeader(
+                            title = "Resource directories",
+                            supportingText = "Folders this channel needs to read from.",
+                        )
+                        mountEntries.forEach { entry ->
+                            ResourceMountEditorRow(
+                                entry = entry,
+                                onPickMount = {
+                                    onPickMount(
+                                        MountSelectionRequest(
+                                            ownerInstanceId = configurationOwnerId,
+                                            implementationId = descriptor.implementationId,
+                                            declarationId = entry.declaration.declarationId,
+                                        ),
+                                    )
+                                },
                             )
-                        },
-                    )
+                        }
+                    }
                 }
             }
 
             submissionError?.let { error ->
-                Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TalkcanStatusBadge(
+                            label = "Error",
+                            tone = TalkcanStatusTone.Error,
+                        )
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             }
 
             Button(
@@ -227,7 +283,7 @@ fun ChannelConfigurationScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(submitLabel)
+                Text(submitLabel, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -238,7 +294,7 @@ fun ChannelConfigurationScreen(
                 unverifiedDialogState = null
                 selectedSynthesisVoiceId = initialSynthesisVoiceProfileId
             },
-            title = { Text("Unverified Voice Profile") },
+            title = { Text("Unverified voice profile") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -325,8 +381,8 @@ private fun ChannelConfigurationFieldEditor(
             label = { Text(requiredLabel(field)) },
             supportingText = {
                 field.minimum?.let { minimum ->
-                    Text("Minimum: $minimum" + field.maximum?.let { ", maximum: $it" }.orEmpty())
-                } ?: field.maximum?.let { maximum -> Text("Maximum: $maximum") }
+                    Text("Enter a number from $minimum" + field.maximum?.let { " to $it" }.orEmpty())
+                } ?: field.maximum?.let { maximum -> Text("Enter a number up to $maximum") }
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             modifier = Modifier.fillMaxWidth(),
@@ -440,15 +496,28 @@ private fun DynamicChoiceEditor(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(requiredLabel(field), style = MaterialTheme.typography.bodyLarge)
         presentation.statusText?.let { message ->
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (presentation.statusIsError) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+            if (presentation.statusIsError) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TalkcanStatusBadge(
+                        label = "Error",
+                        tone = TalkcanStatusTone.Error,
+                    )
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            } else {
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (editorState.resolution is DynamicConfigurationChoiceResolution.Unavailable) {
             TextButton(onClick = { retryNonce += 1 }) {
@@ -689,19 +758,36 @@ private fun ResourceMountEditorRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = "Status: ${entry.statusPortable}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (entry.isBlocking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val (badgeLabel, badgeTone) = when (entry.availability) {
+                is MountAvailability.Available -> "Available" to TalkcanStatusTone.Ready
+                is MountAvailability.Unavailable -> if (entry.isBlocking) {
+                    "Action needed" to TalkcanStatusTone.Error
+                } else {
+                    "Not set" to TalkcanStatusTone.Neutral
+                }
+            }
+            TalkcanStatusBadge(
+                label = badgeLabel,
+                tone = badgeTone,
+            )
+            Text(
+                text = entry.statusPortable,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         OutlinedButton(
             onClick = onPickMount,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
                 when (entry.availability) {
-                    is io.talkcan.resource.MountAvailability.Available -> "Change directory"
-                    is io.talkcan.resource.MountAvailability.Unavailable -> "Select directory"
+                    is MountAvailability.Available -> "Change directory"
+                    is MountAvailability.Unavailable -> "Select directory"
                 },
             )
         }
