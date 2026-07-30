@@ -10,6 +10,9 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The process-wide conversational-audio owner.
@@ -27,6 +30,8 @@ internal class HostAudioCoordinator(
     private var activePlayback: ActivePcmPlayback? = null
     private var rejectedPressPendingRelease = false
 
+    private val _isPlaybackActive = MutableStateFlow(false)
+    val isPlaybackActive: StateFlow<Boolean> = _isPlaybackActive.asStateFlow()
     /**
      * This is intentionally synchronous: PTT ingress must reject playback before the protected
      * dispatcher can auto-transition the mode or reserve an input session.
@@ -83,7 +88,10 @@ internal class HostAudioCoordinator(
         val operation = synchronized(lock) {
             if (closed) return HostPlaybackResult.Closed
             if (owner != null) return HostPlaybackResult.Busy
-            Owner.Playback(newOperationId(), kind).also { owner = it }
+            Owner.Playback(newOperationId(), kind).also {
+                owner = it
+                _isPlaybackActive.value = true
+            }
         }
         var route: AcquiredPlaybackRoute? = null
         var playback: ActivePcmPlayback? = null
@@ -180,6 +188,7 @@ internal class HostAudioCoordinator(
             val active = activePlayback
             owner = null
             activePlayback = null
+            _isPlaybackActive.value = false
             active
         }
         skipped?.skip()
@@ -190,6 +199,7 @@ internal class HostAudioCoordinator(
         val playback = synchronized(lock) {
             closed = true
             (owner as? Owner.Playback)?.terminating = true
+            _isPlaybackActive.value = false
             activePlayback
         }
         playback?.skip()
@@ -204,6 +214,7 @@ internal class HostAudioCoordinator(
                 owner = null
                 activePlayback = null
                 rejectedPressPendingRelease = false
+                _isPlaybackActive.value = false
             }
         }
         return result

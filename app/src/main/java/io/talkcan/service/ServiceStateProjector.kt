@@ -7,6 +7,7 @@ import io.talkcan.model.InputMode
 import io.talkcan.model.InputModeAvailability
 import io.talkcan.model.InputModeSelection
 import io.talkcan.model.MonitorState
+import io.talkcan.model.PttAudioOperationState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,5 +109,10 @@ internal class ServiceStateProjector(
      */
     fun publishChannels(channels: List<ChannelRuntimeSnapshot>) {
         _state.update { it.copy(channels = channels) }
+    }
+
+    /** Publishes the combined PTT and playback state flow. */
+    fun publishPttAudioState(pttAudioState: PttAudioOperationState) {
+        _state.update { it.copy(pttAudioState = pttAudioState) }
     }
 }

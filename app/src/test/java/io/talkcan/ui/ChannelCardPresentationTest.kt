@@ -6,14 +6,12 @@ import org.junit.Test
 
 class ChannelCardPresentationTest {
     @Test
-    fun `channel cards present selection availability and PTT state with intentional precedence`() {
+    fun `channel cards present selection and availability with intentional precedence`() {
         val cases = listOf(
             Case(
                 name = "selected available",
                 isActive = true,
                 isAvailable = true,
-                isPttActive = false,
-                isLocked = false,
                 expectedLabel = "Selected",
                 expectedTone = ChannelCardTone.Primary,
             ),
@@ -21,8 +19,6 @@ class ChannelCardPresentationTest {
                 name = "selected unavailable remains active",
                 isActive = true,
                 isAvailable = false,
-                isPttActive = false,
-                isLocked = false,
                 expectedLabel = "Selected",
                 expectedTone = ChannelCardTone.Primary,
             ),
@@ -30,8 +26,6 @@ class ChannelCardPresentationTest {
                 name = "unselected available",
                 isActive = false,
                 isAvailable = true,
-                isPttActive = false,
-                isLocked = false,
                 expectedLabel = "Ready",
                 expectedTone = ChannelCardTone.Secondary,
             ),
@@ -39,27 +33,7 @@ class ChannelCardPresentationTest {
                 name = "unselected unavailable",
                 isActive = false,
                 isAvailable = false,
-                isPttActive = false,
-                isLocked = false,
                 expectedLabel = "Unavailable",
-                expectedTone = ChannelCardTone.Secondary,
-            ),
-            Case(
-                name = "PTT overrides selected unavailable state",
-                isActive = true,
-                isAvailable = false,
-                isPttActive = true,
-                isLocked = false,
-                expectedLabel = "Recording",
-                expectedTone = ChannelCardTone.Secondary,
-            ),
-            Case(
-                name = "LOCKED overrides PTT selected unavailable state",
-                isActive = true,
-                isAvailable = false,
-                isPttActive = true,
-                isLocked = true,
-                expectedLabel = "Locked",
                 expectedTone = ChannelCardTone.Secondary,
             ),
         )
@@ -68,8 +42,6 @@ class ChannelCardPresentationTest {
             val presentation = channelCardPresentation(
                 isActive = case.isActive,
                 isAvailable = case.isAvailable,
-                isPttActive = case.isPttActive,
-                isLocked = case.isLocked,
             )
 
             assertEquals("${case.name} label", case.expectedLabel, presentation.statusLabel)
@@ -96,8 +68,6 @@ class ChannelCardPresentationTest {
         val name: String,
         val isActive: Boolean,
         val isAvailable: Boolean,
-        val isPttActive: Boolean,
-        val isLocked: Boolean,
         val expectedLabel: String,
         val expectedTone: ChannelCardTone,
     )

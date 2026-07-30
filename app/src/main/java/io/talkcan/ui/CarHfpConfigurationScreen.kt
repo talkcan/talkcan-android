@@ -9,18 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -33,7 +27,6 @@ import io.talkcan.model.CarHfpInspectionStatus
 import io.talkcan.model.CarHfpSelectionFailure
 import io.talkcan.model.ConfiguredCarStatus
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CarHfpConfigurationScreen(
     state: CarHfpConfigurationState,
@@ -41,76 +34,61 @@ fun CarHfpConfigurationScreen(
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(Unit) { actions.refreshCarHfpConfiguration() }
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text("Car headset") },
-                navigationIcon = {
-                    IconButton(onClick = actions::navigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            TerminalHeader(
-                title = "Connect your car",
-                subtitle = "Select your car's call-audio profile so Talkcan routes voice through it.",
-            )
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        TerminalHeader(
+            title = "Connect your car",
+            subtitle = "Select your car's call-audio profile so Talkcan routes voice through it.",
+        )
 
-            ConfiguredCarCard(state)
-            state.selectionFailure?.let { failure ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
+        ConfiguredCarCard(state)
+        state.selectionFailure?.let { failure ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        TalkcanSectionHeader(title = "Selection failed")
-                        Text(
-                            text = failure.message(),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                    }
+                    TalkcanSectionHeader(title = "Selection failed")
+                    Text(
+                        text = failure.message(),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
                 }
             }
+        }
 
-            TalkcanSectionHeader(
-                title = "Connected devices",
-                supportingText = "Pick the car's headset profile from devices currently paired over Bluetooth.",
-            )
-            InspectionGuidance(state)
-            state.candidates.forEach { candidate ->
-                CandidateRow(candidate, actions::selectCarHfpCandidate)
+        TalkcanSectionHeader(
+            title = "Connected devices",
+            supportingText = "Pick the car's headset profile from devices currently paired over Bluetooth.",
+        )
+        InspectionGuidance(state)
+        state.candidates.forEach { candidate ->
+            CandidateRow(candidate, actions::selectCarHfpCandidate)
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = actions::refreshCarHfpConfiguration,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Retry device inspection")
             }
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = actions::refreshCarHfpConfiguration,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Retry device inspection")
-                }
-                OutlinedButton(
-                    onClick = actions::openBluetoothSettings,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Open Bluetooth settings")
-                }
+            OutlinedButton(
+                onClick = actions::openBluetoothSettings,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Open Bluetooth settings")
             }
         }
     }

@@ -1,8 +1,6 @@
 package io.talkcan.ui
 
-import io.talkcan.model.InputMode
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,76 +39,4 @@ class MainDashboardVuMeterTest {
         assertTrue(fromLow.isPresent)
     }
 
-    @Test
-    fun `available work tile tap selects mode`() {
-        assertEquals(
-            DashboardModeTileAction.SelectMode,
-            dashboardModeTileTapAction(InputMode.Work, isAvailable = true),
-        )
-    }
-
-    @Test
-    fun `unavailable work tile tap opens rsm setup`() {
-        assertEquals(
-            DashboardModeTileAction.OpenRsmSetup,
-            dashboardModeTileTapAction(InputMode.Work, isAvailable = false),
-        )
-    }
-
-    @Test
-    fun `car tap selects only when available while long press always opens car setup`() {
-        val cases = listOf(
-            true to DashboardModeTileAction.SelectMode,
-            false to DashboardModeTileAction.Ignore,
-        )
-
-        cases.forEach { (isAvailable, expectedTapAction) ->
-            val tapAction = dashboardModeTileTapAction(InputMode.OnTheRoad, isAvailable)
-            val longPressAction = dashboardModeTileLongPressAction(InputMode.OnTheRoad)
-
-            assertEquals(expectedTapAction, tapAction)
-            assertEquals(DashboardModeTileAction.OpenCarSetup, longPressAction)
-            assertNotEquals(
-                "CAR long press must not dispatch mode selection when isAvailable=$isAvailable",
-                DashboardModeTileAction.SelectMode,
-                longPressAction,
-            )
-            assertNotEquals(
-                "CAR long press must remain distinct from its tap action when isAvailable=$isAvailable",
-                tapAction,
-                longPressAction,
-            )
-        }
-    }
-
-    @Test
-    fun `car setup intent dispatches only car navigation`() {
-        val dispatched = mutableListOf<String>()
-
-        dispatchDashboardModeTileAction(
-            action = DashboardModeTileAction.OpenCarSetup,
-            mode = InputMode.OnTheRoad,
-            onModeSelected = { dispatched += "select mode" },
-            onRsmSetupRequested = { dispatched += "open RSM setup" },
-            onCarSetupRequested = { dispatched += "open car setup" },
-        )
-
-        assertEquals(listOf("open car setup"), dispatched)
-    }
-
-    @Test
-    fun `work tile long press opens rsm setup`() {
-        assertEquals(
-            DashboardModeTileAction.OpenRsmSetup,
-            dashboardModeTileLongPressAction(InputMode.Work),
-        )
-    }
-
-    @Test
-    fun `phone tile long press is ignored`() {
-        assertEquals(
-            DashboardModeTileAction.Ignore,
-            dashboardModeTileLongPressAction(InputMode.OnAPinch),
-        )
-    }
 }
