@@ -228,6 +228,21 @@ class VoiceProfileRepositoryTest {
         assertEquals(10, repo.currentCatalogue.builtIn.size)
     }
 
+    @Test
+    fun reloadPublishesBuiltInThatArrivesAfterRepositoryConstruction() {
+        val m5File = File(builtInDir, "M5.json")
+        assertTrue(m5File.delete())
+        val repo = newRepo()
+        assertFalse(repo.currentCatalogue.builtIn.first { it.displayName == "M5" }.selectable)
+
+        m5File.writeText(VoiceProfileCodec.encode(tensors(), MODEL, null))
+        repo.reload()
+
+        assertTrue(repo.currentCatalogue.builtIn.first { it.displayName == "M5" }.selectable)
+        repo.saveAsNew(tensors(), provenance("builtin:F1" to 1.0), "Custom")
+        assertTrue(repo.currentCatalogue.builtIn.first { it.displayName == "M5" }.selectable)
+    }
+
     // ── 2.5 Lifecycle & quotas ───────────────────────────────────────────────
 
     @Test
