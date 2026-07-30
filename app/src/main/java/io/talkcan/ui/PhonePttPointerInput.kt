@@ -17,27 +17,30 @@ internal fun Modifier.phonePttInput(
 
         val startTransition = startPhonePttGesture(channelId = channelId)
         onPhonePttTransition(startTransition)
+        var gestureState = startTransition.state
 
-        while (stateProvider().isActive) {
+        while (gestureState.isActive) {
             val event = awaitPointerEvent(PointerEventPass.Main)
-            val currentState = stateProvider()
-            if (!currentState.isActive) {
-                break
+            val observedState = stateProvider()
+            if (observedState is PhonePttGestureState.Armed) {
+                gestureState = observedState
             }
             val change = event.changes.firstOrNull { it.id == down.id }
             if (change == null) {
-                val transition = currentState.cancelPhonePttGesture()
+                val transition = gestureState.cancelPhonePttGesture()
                 onPhonePttTransition(transition)
                 break
             }
 
             change.consume()
+            val previousState = gestureState
             val transition = if (change.pressed) {
-                PhonePttGestureTransition(currentState)
+                PhonePttGestureTransition(previousState)
             } else {
-                currentState.releasePhonePttGesture()
+                previousState.releasePhonePttGesture()
             }
-            if (transition.state != currentState || transition.commands.isNotEmpty()) {
+            gestureState = transition.state
+            if (transition.state != previousState || transition.commands.isNotEmpty()) {
                 onPhonePttTransition(transition)
             }
             if (!change.pressed) {

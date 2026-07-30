@@ -25,6 +25,8 @@ All notable changes to Talkcan are documented in this file.
 
 - Refreshed built-in voice profile availability after model acquisition so
   the ten shipped voices cannot remain incorrectly marked as missing.
+- Kept the phone PTT pointer session active until pointer-up so releasing the
+  on-screen control always stops its recording session.
 
 ## [0.10.0] - 2026-07-29
 
