@@ -20,6 +20,20 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +58,7 @@ import io.talkcan.ui.BootstrapLoadingScreen
 import io.talkcan.ui.CarHfpConfigurationScreen
 import io.talkcan.ui.BootstrapRootSurface
 import io.talkcan.ui.ChannelConfigurationScreen
+import io.talkcan.ui.ChannelManagementScreen
 import io.talkcan.ui.ConnectionScreen
 import io.talkcan.ui.DirectorySelection
 import io.talkcan.ui.InitialSetupScreen
@@ -52,23 +67,13 @@ import io.talkcan.ui.MonitorScreen
 import io.talkcan.ui.LogAnalysisScreen
 import io.talkcan.ui.PackageManagementScreen
 import io.talkcan.ui.GenericProfileManagementScreen
+import io.talkcan.ui.SettingsHomeScreen
 import io.talkcan.ui.PttUiActions
 import io.talkcan.ui.ChannelConfigurationSubmitResult
 import io.talkcan.ui.synthesisVoiceChoicesFor
 import io.talkcan.ui.bootstrapRootSurface
 import io.talkcan.ui.theme.TalkcanTheme
 
-internal fun exitDashboardRoute(
-    isPackageManagement: Boolean,
-    isVoiceProfiles: Boolean = false,
-    cleanup: () -> Unit,
-    exitVoiceProfileEditor: () -> Unit = {},
-    setMainRoute: () -> Unit,
-) {
-    if (isPackageManagement) cleanup()
-    if (isVoiceProfiles) exitVoiceProfileEditor()
-    setMainRoute()
-}
 
 class MainActivity : ComponentActivity() {
     private var service by mutableStateOf<PttForegroundService?>(null)
@@ -89,6 +94,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -142,7 +148,48 @@ class MainActivity : ComponentActivity() {
             val voiceProfileEditorState by currentService?.voiceProfileEditorState?.collectAsStateWithLifecycle()
                 ?: remember { mutableStateOf(io.talkcan.service.VoiceProfileEditorState()) }
 
-            var dashboardRoute by rememberSaveable { mutableStateOf(DashboardRoute.Main) }
+            val missingPermissions = (bootstrapState as? BootstrapState.NeedsSetup)?.missingPermissions
+                ?: io.talkcan.service.RequiredPermissions.missing(this@MainActivity)
+            val permissionsReady = missingPermissions.isEmpty()
+
+            val needsManageExternalStorage = (bootstrapState as? BootstrapState.NeedsSetup)?.needsManageExternalStorage
+                ?: !io.talkcan.service.RequiredPermissions.hasManageExternalStorage()
+            val storageReady = !needsManageExternalStorage
+
+            val modelsReady = when (bootstrapState) {
+                is BootstrapState.Ready -> true
+                is BootstrapState.PreparingCore -> true
+                is BootstrapState.Failed -> {
+                    val failedState = bootstrapState as BootstrapState.Failed
+                    failedState.stage != io.talkcan.model.BootstrapStage.CheckingModels && failedState.stage != io.talkcan.model.BootstrapStage.AcquiringModels
+                }
+                is BootstrapState.NeedsSetup -> {
+                    (bootstrapState as BootstrapState.NeedsSetup).invalidModelSets.isEmpty()
+                }
+                else -> false
+            }
+            val invalidModelSets = (bootstrapState as? BootstrapState.NeedsSetup)?.invalidModelSets ?: emptyList()
+
+            val voiceReady = when (bootstrapState) {
+                is BootstrapState.Ready -> true
+                is BootstrapState.PreparingCore -> true
+                is BootstrapState.NeedsSetup -> {
+                    (bootstrapState as BootstrapState.NeedsSetup).offlineNavigationVoiceIssue == null
+                }
+                else -> false
+            }
+            val offlineNavigationVoiceIssue = (bootstrapState as? BootstrapState.NeedsSetup)?.offlineNavigationVoiceIssue
+            val voiceSetupIntent = remember(offlineNavigationVoiceIssue) {
+                resolveVoiceSetupIntent(
+                    this@MainActivity,
+                    offlineNavigationVoiceIssue,
+                )
+            }
+            val voiceSetupRequiresManualNavigation = voiceSetupIntent.action == Settings.ACTION_SETTINGS
+            val setupError = (bootstrapState as? BootstrapState.NeedsSetup)?.error
+
+            var appSection by rememberSaveable { mutableStateOf(AppSection.Radio) }
+            var secondaryRoute by rememberSaveable { mutableStateOf<SecondaryRoute?>(null) }
             var configuredChannelId by rememberSaveable { mutableStateOf<String?>(null) }
             var creatingImplementationId by rememberSaveable { mutableStateOf<String?>(null) }
             var creatingDisplayName by rememberSaveable { mutableStateOf("") }
@@ -274,6 +321,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+
+            fun applyNavigation(action: NavigationAction) {
+                val current = NavigationState(
+                    appSection = appSection,
+                    secondaryRoute = secondaryRoute,
+                    configuredChannelId = configuredChannelId,
+                    creatingImplementationId = creatingImplementationId,
+                    creatingDisplayName = creatingDisplayName
+                )
+                val next = navigate(current, action)
+                appSection = next.appSection
+                secondaryRoute = next.secondaryRoute
+                configuredChannelId = next.configuredChannelId
+                creatingImplementationId = next.creatingImplementationId
+                creatingDisplayName = next.creatingDisplayName
+            }
             val actions = remember(currentService, permissionLauncher, directoryLauncher, mountLauncher, providerDescriptors) {
                 object : PttUiActions {
                     override fun requestPermissions() {
@@ -347,63 +410,74 @@ class MainActivity : ComponentActivity() {
                         currentServiceState?.setInputMode(mode)
                     }
 
+                    override fun navigateToRadio() {
+                        applyNavigation(NavigationAction.NavigateToRadio)
+                    }
+
+                    override fun navigateToSettingsHome() {
+                        applyNavigation(NavigationAction.NavigateToSettingsHome)
+                    }
+
                     override fun navigateToRsmSetup() {
-                        dashboardRoute = if (currentReadyForMonitor) DashboardRoute.Monitor else DashboardRoute.Connection
+                        applyNavigation(NavigationAction.NavigateToRsmSetup(currentReadyForMonitor))
                     }
 
                     override fun navigateToCarSetup() {
                         currentServiceState?.refreshCarHfpConfiguration()
-                        dashboardRoute = DashboardRoute.CarConfiguration
+                        applyNavigation(NavigationAction.NavigateToCarSetup)
                     }
 
                     override fun navigateToChannelConfiguration(channelId: String) {
-                        configuredChannelId = channelId
-                        creatingImplementationId = null
-                        dashboardRoute = DashboardRoute.ChannelConfiguration
+                        applyNavigation(NavigationAction.NavigateToChannelConfiguration(channelId))
+                    }
+
+                    override fun navigateToChannelManagement() {
+                        applyNavigation(NavigationAction.NavigateToChannelManagement)
                     }
 
                     override fun navigateToChannelCreation(
                         implementationId: io.talkcan.model.ChannelImplementationId,
                         displayName: String,
                     ) {
-                        configuredChannelId = null
-                        creatingImplementationId = implementationId.value
-                        creatingDisplayName = displayName
-                        dashboardRoute = DashboardRoute.ChannelCreation
+                        applyNavigation(
+                            NavigationAction.NavigateToChannelCreation(
+                                implementationId.value,
+                                displayName
+                            )
+                        )
                     }
 
                     override fun navigateBack() {
-                        exitDashboardRoute(
-                            isPackageManagement = dashboardRoute == DashboardRoute.PackageManagement,
-                            isVoiceProfiles = dashboardRoute == DashboardRoute.VoiceProfiles,
-                            cleanup = {
-                                currentServiceState?.cleanupPackageManagementRouteExit()
-                            },
-                            exitVoiceProfileEditor = {
-                                currentServiceState?.exitVoiceProfileEditor()
-                            },
-                            setMainRoute = {
-                                dashboardRoute = DashboardRoute.Main
-                            },
+                        applyNavigation(
+                            NavigationAction.NavigateBack(
+                                cleanupPackageManagement = {
+                                    currentServiceState?.cleanupPackageManagementRouteExit()
+                                },
+                                exitVoiceProfileEditor = {
+                                    currentServiceState?.exitVoiceProfileEditor()
+                                }
+                            )
                         )
-                        configuredChannelId = null
-                        creatingImplementationId = null
                     }
 
                     override fun navigateToLogAnalysis() {
-                        dashboardRoute = DashboardRoute.LogAnalysis
+                        applyNavigation(NavigationAction.NavigateToLogAnalysis)
                     }
 
-
                     override fun navigateToPackageManagement() {
-                        dashboardRoute = DashboardRoute.PackageManagement
+                        applyNavigation(NavigationAction.NavigateToPackageManagement)
                     }
 
                     override fun navigateToGenericProfiles() {
-                        dashboardRoute = DashboardRoute.GenericProfiles
+                        applyNavigation(NavigationAction.NavigateToGenericProfiles)
                     }
+
                     override fun navigateToVoiceProfiles() {
-                        dashboardRoute = DashboardRoute.VoiceProfiles
+                        applyNavigation(NavigationAction.NavigateToVoiceProfiles)
+                    }
+
+                    override fun navigateToSystemReadiness() {
+                        applyNavigation(NavigationAction.NavigateToSystemReadiness)
                     }
 
                     override fun createGenericProfile(
@@ -500,17 +574,22 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .safeDrawingPadding(),
+                            .fillMaxSize(),
                     ) {
                         when (rootSurface) {
                         BootstrapRootSurface.Loading -> {
                             BackHandler(enabled = false) { }
-                            BootstrapLoadingScreen(
-                                state = bootstrapState,
-                                modelProgress = modelProgress,
-                                onRetry = { currentServiceState?.retryBootstrap() },
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .safeDrawingPadding(),
+                            ) {
+                                BootstrapLoadingScreen(
+                                    state = bootstrapState,
+                                    modelProgress = modelProgress,
+                                    onRetry = { currentServiceState?.retryBootstrap() },
+                                )
+                            }
                         }
 
                         BootstrapRootSurface.Setup -> {
@@ -523,297 +602,435 @@ class MainActivity : ComponentActivity() {
                                     voiceIssue,
                                 )
                             }
-                            InitialSetupScreen(
-                                missingPermissions = setup.missingPermissions,
-                                needsManageExternalStorage = setup.needsManageExternalStorage,
-                                invalidModelSets = setup.invalidModelSets,
-                                error = setup.error,
-                                offlineNavigationVoiceIssue = voiceIssue,
-                                voiceSetupRequiresManualNavigation =
-                                    voiceSetupIntent.action == Settings.ACTION_SETTINGS,
-                                onGrantPermissions = {
-                                    permissionLauncher.launch(RequiredPermissions.runtimePermissions())
-                                },
-                                onGrantManageExternalStorage = actions::requestManageExternalStorage,
-                                onStartModelDownload = { currentServiceState?.startModelAcquisition() },
-                                onResolveVoiceSetup = {
-                                    voiceSetupLauncher.launch(voiceSetupIntent)
-                                },
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .safeDrawingPadding(),
+                            ) {
+                                InitialSetupScreen(
+                                    missingPermissions = setup.missingPermissions,
+                                    needsManageExternalStorage = setup.needsManageExternalStorage,
+                                    invalidModelSets = setup.invalidModelSets,
+                                    error = setup.error,
+                                    offlineNavigationVoiceIssue = voiceIssue,
+                                    voiceSetupRequiresManualNavigation =
+                                        voiceSetupIntent.action == Settings.ACTION_SETTINGS,
+                                    onGrantPermissions = {
+                                        permissionLauncher.launch(RequiredPermissions.runtimePermissions())
+                                    },
+                                    onGrantManageExternalStorage = actions::requestManageExternalStorage,
+                                    onStartModelDownload = { currentServiceState?.startModelAcquisition() },
+                                    onResolveVoiceSetup = {
+                                        voiceSetupLauncher.launch(voiceSetupIntent)
+                                    },
+                                )
+                            }
                         }
 
                         BootstrapRootSurface.Dashboard -> {
-                            BackHandler(enabled = dashboardRoute != DashboardRoute.Main) { actions.navigateBack() }
-                            when (dashboardRoute) {
-                                DashboardRoute.Main -> MainDashboardScreen(
+                            BackHandler(enabled = appSection != AppSection.Radio || secondaryRoute != null) { actions.navigateBack() }
+                            Scaffold(
+                                modifier = Modifier.fillMaxSize(),
+                                bottomBar = {
+                                    NavigationBar {
+                                        NavigationBarItem(
+                                            selected = appSection == AppSection.Radio,
+                                            onClick = actions::navigateToRadio,
+                                            icon = {
+                                                Icon(
+                                                    imageVector = Icons.Filled.PlayArrow,
+                                                    contentDescription = "Radio",
+                                                )
+                                            },
+                                            label = { Text("Radio") },
+                                        )
+                                        NavigationBarItem(
+                                            selected = appSection == AppSection.Settings,
+                                            onClick = actions::navigateToSettingsHome,
+                                            icon = {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Settings,
+                                                    contentDescription = "Settings",
+                                                )
+                                            },
+                                            label = { Text("Settings") },
+                                        )
+                                    }
+                                }
+                            ) { paddingValues ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(paddingValues),
+                                ) {
+                                    if (appSection == AppSection.Radio) {
+                                MainDashboardScreen(
                                     appState = state,
                                     level = level,
                                     isCapturing = isCapturing,
                                     providerDescriptors = providerDescriptors,
                                     actions = actions,
                                 )
+                            } else {
+                                val currentRoute = secondaryRoute
+                                if (currentRoute != null) {
+                                    Scaffold(
+                                        modifier = Modifier.fillMaxSize(),
+                                        topBar = {
+                                            TopAppBar(
+                                                title = {
+                                                    val routeTitle = when (currentRoute) {
+                                                        SecondaryRoute.Connection -> "Radio connection"
+                                                        SecondaryRoute.Monitor -> "Hardware monitor"
+                                                        SecondaryRoute.CarConfiguration -> "Car headset"
+                                                        SecondaryRoute.ChannelConfiguration -> {
+                                                            val definition = catalogue?.definitions?.firstOrNull { it.id == configuredChannelId }
+                                                            definition?.name ?: "Channel configuration"
+                                                        }
+                                                        SecondaryRoute.ChannelManagement -> "Channel management"
+                                                        SecondaryRoute.ChannelCreation -> {
+                                                            val descriptor = providerDescriptors.firstOrNull {
+                                                                it.implementationId.value == creatingImplementationId
+                                                            }
+                                                            descriptor?.let { "New ${it.presentation.label}" } ?: "Channel creation"
+                                                        }
+                                                        SecondaryRoute.LogAnalysis -> "Diagnostic logs"
+                                                        SecondaryRoute.PackageManagement -> "Installed providers"
+                                                        SecondaryRoute.GenericProfiles -> "Provider profiles"
+                                                        SecondaryRoute.VoiceProfiles -> "Voice profiles"
+                                                        SecondaryRoute.SystemReadiness -> "System readiness"
+                                                    }
+                                                    Text(routeTitle)
+                                                },
+                                                navigationIcon = {
+                                                    IconButton(onClick = actions::navigateBack) {
+                                                        Icon(
+                                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                            contentDescription = "Back",
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        },
+                                    ) { innerPadding ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(innerPadding),
+                                        ) {
+                                            when (currentRoute) {
+                                                SecondaryRoute.Connection -> ConnectionScreen(state.connection, actions)
+                                                SecondaryRoute.Monitor -> MonitorScreen(state.monitor, actions)
+                                                SecondaryRoute.CarConfiguration -> CarHfpConfigurationScreen(
+                                                    state = state.carHfpConfiguration,
+                                                    actions = actions,
+                                                )
+                                                SecondaryRoute.ChannelConfiguration -> {
+                                                    val definition = catalogue?.definitions?.firstOrNull { it.id == configuredChannelId }
+                                                    val descriptor = definition?.let { target ->
+                                                        providerDescriptors.firstOrNull {
+                                                            it.implementationId == target.implementationId
+                                                        }
+                                                    }
+                                                    if (definition != null && descriptor != null) {
+                                                        ChannelConfigurationScreen(
+                                                            title = definition.name,
+                                                            configurationOwnerId = definition.id,
+                                                            descriptor = descriptor,
+                                                            initialPayload = definition.configPayload,
+                                                            submitLabel = "Save configuration",
+                                                            onSubmit = { payload ->
+                                                                actions.updateChannelConfiguration(definition.id, payload).also { error ->
+                                                                    if (error == null) actions.navigateBack()
+                                                                }
+                                                            },
+                                                            choiceResolver = dynamicChoiceResolver,
+                                                            directorySelection = directorySelection,
+                                                            onPickDirectory = actions::pickDirectory,
+                                                            mountEntries = currentService?.mountEditorEntries(definition.id, definition.implementationId) ?: emptyList(),
+                                                            onPickMount = actions::pickMount,
+                                                            initialSynthesisVoiceProfileId = definition.hostPreferences.synthesisVoiceProfileId?.value,
+                                                            synthesisVoiceChoices = synthesisVoiceChoicesFor(
+                                                                catalogue = voiceProfileCatalogue,
+                                                                currentSelectionId = definition.hostPreferences.synthesisVoiceProfileId,
+                                                            ),
+                                                            onCommitWithVoice = if (descriptor.capabilities.contains(ChannelCapability.Synthesis)) {
+                                                                { payload, profileId, acknowledgeUnverified ->
+                                                                    val providerError = actions.updateChannelConfiguration(definition.id, payload)
+                                                                    if (providerError != null) {
+                                                                        ChannelConfigurationSubmitResult.Error(providerError)
+                                                                    } else {
+                                                                        when (
+                                                                            val mutation = currentServiceState?.updateChannelSynthesisVoiceProfile(
+                                                                                channelId = definition.id,
+                                                                                profileId = profileId,
+                                                                                acknowledgeUnverified = acknowledgeUnverified,
+                                                                            )
+                                                                        ) {
+                                                                            is ChannelVoicePreferenceMutation.Committed -> {
+                                                                                actions.navigateBack()
+                                                                                ChannelConfigurationSubmitResult.Success
+                                                                            }
+                                                                            is ChannelVoicePreferenceMutation.VoiceRefused -> {
+                                                                                when (val failure = mutation.failure) {
+                                                                                    is ChannelVoicePreferenceFailure.UnverifiedRequiresAcknowledgement -> {
+                                                                                        ChannelConfigurationSubmitResult.UnverifiedAcknowledgementRequired(
+                                                                                            profileId = failure.profileId,
+                                                                                            displayName = failure.displayName,
+                                                                                            diagnostic = failure.diagnostic,
+                                                                                        )
+                                                                                    }
+                                                                                    else -> {
+                                                                                        ChannelConfigurationSubmitResult.Error(failure.diagnostic)
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            is ChannelVoicePreferenceMutation.ChannelRefused -> {
+                                                                                ChannelConfigurationSubmitResult.Error(mutation.error.message)
+                                                                            }
+                                                                            null -> {
+                                                                                val err = actions.updateChannelConfiguration(definition.id, payload)
+                                                                                if (err == null) {
+                                                                                    actions.navigateBack()
+                                                                                    ChannelConfigurationSubmitResult.Success
+                                                                                } else {
+                                                                                    ChannelConfigurationSubmitResult.Error(err)
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                null
+                                                            },
+                                                        )
+                                                    }
+                                                }
 
-                                DashboardRoute.Connection -> ConnectionScreen(state.connection, actions)
-                                DashboardRoute.Monitor -> MonitorScreen(state.monitor, actions)
-                                DashboardRoute.CarConfiguration -> CarHfpConfigurationScreen(
-                                    state = state.carHfpConfiguration,
-                                    actions = actions,
-                                )
-                                DashboardRoute.ChannelConfiguration -> {
-                                    val definition = catalogue?.definitions?.firstOrNull { it.id == configuredChannelId }
-                                    val descriptor = definition?.let { target ->
-                                        providerDescriptors.firstOrNull {
-                                            it.implementationId == target.implementationId
+                                                SecondaryRoute.ChannelCreation -> {
+                                                    val descriptor = providerDescriptors.firstOrNull {
+                                                        it.implementationId.value == creatingImplementationId
+                                                    }
+                                                    if (descriptor != null) {
+                                                        ChannelConfigurationScreen(
+                                                            title = "New ${descriptor.presentation.label}",
+                                                            configurationOwnerId = "new:${descriptor.implementationId.value}:$creatingDisplayName",
+                                                            descriptor = descriptor,
+                                                            initialPayload = descriptor.configuration.defaultPayload(),
+                                                            submitLabel = "Create channel",
+                                                            onSubmit = { payload ->
+                                                                actions.createChannel(
+                                                                    descriptor.implementationId,
+                                                                    creatingDisplayName,
+                                                                    payload,
+                                                                ).also { error ->
+                                                                    if (error == null) actions.navigateBack()
+                                                                }
+                                                            },
+                                                            choiceResolver = dynamicChoiceResolver,
+                                                            directorySelection = directorySelection,
+                                                            onPickDirectory = actions::pickDirectory,
+                                                            mountEntries = emptyList(),
+                                                            onPickMount = actions::pickMount,
+                                                            initialSynthesisVoiceProfileId = null,
+                                                            synthesisVoiceChoices = synthesisVoiceChoicesFor(
+                                                                catalogue = voiceProfileCatalogue,
+                                                                currentSelectionId = null,
+                                                            ),
+                                                            onCommitWithVoice = if (descriptor.capabilities.contains(ChannelCapability.Synthesis)) {
+                                                                { payload, profileId, acknowledgeUnverified ->
+                                                                    when (
+                                                                        val mutation = currentServiceState?.createChannelWithVoice(
+                                                                            implementationId = descriptor.implementationId,
+                                                                            name = creatingDisplayName,
+                                                                            payload = payload,
+                                                                            voiceProfileId = profileId,
+                                                                            acknowledgeUnverified = acknowledgeUnverified,
+                                                                        )
+                                                                    ) {
+                                                                        is ChannelVoicePreferenceMutation.Committed -> {
+                                                                            actions.navigateBack()
+                                                                            ChannelConfigurationSubmitResult.Success
+                                                                        }
+                                                                        is ChannelVoicePreferenceMutation.VoiceRefused -> {
+                                                                            when (val failure = mutation.failure) {
+                                                                                is ChannelVoicePreferenceFailure.UnverifiedRequiresAcknowledgement -> {
+                                                                                    ChannelConfigurationSubmitResult.UnverifiedAcknowledgementRequired(
+                                                                                        profileId = failure.profileId,
+                                                                                        displayName = failure.displayName,
+                                                                                        diagnostic = failure.diagnostic,
+                                                                                    )
+                                                                                }
+                                                                                else -> {
+                                                                                    ChannelConfigurationSubmitResult.Error(failure.diagnostic)
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        is ChannelVoicePreferenceMutation.ChannelRefused -> {
+                                                                            ChannelConfigurationSubmitResult.Error(mutation.error.message)
+                                                                        }
+                                                                        null -> {
+                                                                            val err = actions.createChannel(
+                                                                                descriptor.implementationId,
+                                                                                creatingDisplayName,
+                                                                                payload,
+                                                                            )
+                                                                            if (err == null) {
+                                                                                actions.navigateBack()
+                                                                                ChannelConfigurationSubmitResult.Success
+                                                                            } else {
+                                                                                ChannelConfigurationSubmitResult.Error(err)
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                null
+                                                            },
+                                                        )
+                                                    }
+                                                }
+
+                                                SecondaryRoute.ChannelManagement -> ChannelManagementScreen(
+                                                    appState = state,
+                                                    providerDescriptors = providerDescriptors,
+                                                    actions = actions,
+                                                )
+
+                                                SecondaryRoute.LogAnalysis -> {
+                                                    LogAnalysisScreen(
+                                                        entries = logEntries,
+                                                        onClear = { currentServiceState?.clearLogs() },
+                                                        onSetGlobalLevel = { level ->
+                                                            currentServiceState?.setGlobalLogLevel(level)
+                                                        },
+                                                        onSetTagLevel = { tag, level ->
+                                                            currentServiceState?.setTagLogLevel(tag, level)
+                                                        },
+                                                        onClearTagLevel = { tag ->
+                                                            currentServiceState?.clearTagLogLevel(tag)
+                                                        },
+                                                        currentGlobalLevel = currentGlobalLevel,
+                                                        tagLevels = currentTagLevels,
+                                                    )
+                                                }
+
+                                                SecondaryRoute.PackageManagement -> {
+                                                    PackageManagementScreen(
+                                                        summary = packageManagementSummary,
+                                                        profileState = genericProfileState,
+                                                        actions = actions,
+                                                    )
+                                                }
+
+                                                SecondaryRoute.GenericProfiles -> GenericProfileManagementScreen(
+                                                    state = genericProfileState,
+                                                    actions = actions,
+                                                )
+                                                SecondaryRoute.VoiceProfiles -> io.talkcan.ui.VoiceProfileManagementScreen(
+                                                    catalogue = voiceProfileCatalogue,
+                                                    editorState = voiceProfileEditorState,
+                                                    onSelectSources = { ids, discard ->
+                                                        currentServiceState?.selectVoiceProfileSources(ids.map { it.value }, discard)
+                                                    },
+                                                    onSetEqualWeights = {
+                                                        currentServiceState?.setVoiceProfileEqualWeights()
+                                                    },
+                                                    onSetManualWeights = { weights ->
+                                                        currentServiceState?.setVoiceProfileManualWeights(weights)
+                                                    },
+                                                    onSetRandomWeights = { seed ->
+                                                        currentServiceState?.setVoiceProfileRandomWeights(seed)
+                                                    },
+                                                    onApplyOperation = { op ->
+                                                        currentServiceState?.applyVoiceProfileOperation(op)
+                                                    },
+                                                    onUndoOperation = {
+                                                        currentServiceState?.undoVoiceProfileOperation()
+                                                    },
+                                                    onResetDraft = {
+                                                        currentServiceState?.resetVoiceProfileDraft()
+                                                    },
+                                                    onAcknowledgeFailure = {
+                                                        currentServiceState?.acknowledgeVoiceProfileFailure()
+                                                    },
+                                                    onSaveDraftAsNew = { name ->
+                                                        currentServiceState?.saveVoiceProfileDraftAsNew(name)
+                                                    },
+                                                    onRenameProfile = { id, name ->
+                                                        currentServiceState?.renameVoiceProfile(id.value, name)
+                                                    },
+                                                    onDeleteProfile = { id ->
+                                                        currentServiceState?.deleteVoiceProfile(id.value)
+                                                    },
+                                                    onImportProfile = { name ->
+                                                        pendingImportDisplayName = name
+                                                        importProfileLauncher.launch(arrayOf("application/json", "*/*"))
+                                                    },
+                                                    onExportProfile = { id, filename ->
+                                                        pendingExportProfileId = id
+                                                        exportProfileLauncher.launch(filename)
+                                                    },
+                                                    onPreviewDraft = { text ->
+                                                        currentServiceState?.previewVoiceProfileDraft(text)
+                                                    },
+                                                    onCancelPreview = {
+                                                        currentServiceState?.cancelVoiceProfilePreview()
+                                                    },
+                                                    onExitEditor = {
+                                                        currentServiceState?.exitVoiceProfileEditor()
+                                                    },
+                                                )
+                                                SecondaryRoute.SystemReadiness -> {
+                                                    io.talkcan.ui.SystemReadinessScreen(
+                                                        permissionsReady = permissionsReady,
+                                                        missingPermissions = missingPermissions,
+                                                        storageReady = storageReady,
+                                                        modelsReady = modelsReady,
+                                                        invalidModelSets = invalidModelSets,
+                                                        voiceReady = voiceReady,
+                                                        offlineNavigationVoiceIssue = offlineNavigationVoiceIssue,
+                                                        voiceSetupRequiresManualNavigation = voiceSetupRequiresManualNavigation,
+                                                        error = setupError,
+                                                        modelProgress = modelProgress,
+                                                        onGrantPermissions = {
+                                                            permissionLauncher.launch(RequiredPermissions.runtimePermissions())
+                                                        },
+                                                        onGrantManageExternalStorage = actions::requestManageExternalStorage,
+                                                        onStartModelDownload = { currentServiceState?.startModelAcquisition() },
+                                                        onResolveVoiceSetup = {
+                                                            voiceSetupLauncher.launch(voiceSetupIntent)
+                                                        },
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
-                                    if (definition != null && descriptor != null) {
-                                        ChannelConfigurationScreen(
-                                            title = definition.name,
-                                            configurationOwnerId = definition.id,
-                                            descriptor = descriptor,
-                                            initialPayload = definition.configPayload,
-                                            submitLabel = "Save configuration",
-                                            onSubmit = { payload ->
-                                                actions.updateChannelConfiguration(definition.id, payload).also { error ->
-                                                    if (error == null) actions.navigateBack()
-                                                }
-                                            },
-                                            choiceResolver = dynamicChoiceResolver,
-                                            directorySelection = directorySelection,
-                                            onPickDirectory = actions::pickDirectory,
-                                            mountEntries = currentService?.mountEditorEntries(definition.id, definition.implementationId) ?: emptyList(),
-                                             onPickMount = actions::pickMount,
-                                             onBack = actions::navigateBack,
-                                            initialSynthesisVoiceProfileId = definition.hostPreferences.synthesisVoiceProfileId?.value,
-                                            synthesisVoiceChoices = synthesisVoiceChoicesFor(
-                                                catalogue = voiceProfileCatalogue,
-                                                currentSelectionId = definition.hostPreferences.synthesisVoiceProfileId,
-                                            ),
-                                            onCommitWithVoice = if (descriptor.capabilities.contains(ChannelCapability.Synthesis)) {
-                                                { payload, profileId, acknowledgeUnverified ->
-                                                    val providerError = actions.updateChannelConfiguration(definition.id, payload)
-                                                    if (providerError != null) {
-                                                        ChannelConfigurationSubmitResult.Error(providerError)
-                                                    } else {
-                                                        when (
-                                                            val mutation = currentServiceState?.updateChannelSynthesisVoiceProfile(
-                                                                 channelId = definition.id,
-                                                                profileId = profileId,
-                                                                acknowledgeUnverified = acknowledgeUnverified,
-                                                            )
-                                                        ) {
-                                                            is ChannelVoicePreferenceMutation.Committed -> {
-                                                                actions.navigateBack()
-                                                                ChannelConfigurationSubmitResult.Success
-                                                            }
-                                                            is ChannelVoicePreferenceMutation.VoiceRefused -> {
-                                                                when (val failure = mutation.failure) {
-                                                                    is ChannelVoicePreferenceFailure.UnverifiedRequiresAcknowledgement -> {
-                                                                        ChannelConfigurationSubmitResult.UnverifiedAcknowledgementRequired(
-                                                                            profileId = failure.profileId,
-                                                                            displayName = failure.displayName,
-                                                                            diagnostic = failure.diagnostic,
-                                                                        )
-                                                                    }
-                                                                    else -> {
-                                                                        ChannelConfigurationSubmitResult.Error(failure.diagnostic)
-                                                                    }
-                                                                }
-                                                            }
-                                                            is ChannelVoicePreferenceMutation.ChannelRefused -> {
-                                                                ChannelConfigurationSubmitResult.Error(mutation.error.message)
-                                                            }
-                                                            null -> {
-                                                                actions.navigateBack()
-                                                                ChannelConfigurationSubmitResult.Success
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                null
-                                            },
-                                         )
-                                    }
-                                }
-
-                                DashboardRoute.ChannelCreation -> {
-                                    val descriptor = providerDescriptors.firstOrNull {
-                                        it.implementationId.value == creatingImplementationId
-                                    }
-                                    if (descriptor != null) {
-                                        ChannelConfigurationScreen(
-                                            title = "New ${descriptor.presentation.label}",
-                                            configurationOwnerId = "new:${descriptor.implementationId.value}:$creatingDisplayName",
-                                            descriptor = descriptor,
-                                            initialPayload = descriptor.configuration.defaultPayload(),
-                                            submitLabel = "Create channel",
-                                            onSubmit = { payload ->
-                                                actions.createChannel(
-                                                    descriptor.implementationId,
-                                                    creatingDisplayName,
-                                                    payload,
-                                                ).also { error ->
-                                                    if (error == null) actions.navigateBack()
-                                                }
-                                            },
-                                            choiceResolver = dynamicChoiceResolver,
-                                            directorySelection = directorySelection,
-                                            onPickDirectory = actions::pickDirectory,
-                                            mountEntries = emptyList(),
-                                             onPickMount = actions::pickMount,
-                                             onBack = actions::navigateBack,
-                                            initialSynthesisVoiceProfileId = null,
-                                            synthesisVoiceChoices = synthesisVoiceChoicesFor(
-                                                catalogue = voiceProfileCatalogue,
-                                                currentSelectionId = null,
-                                            ),
-                                            onCommitWithVoice = if (descriptor.capabilities.contains(ChannelCapability.Synthesis)) {
-                                                { payload, profileId, acknowledgeUnverified ->
-                                                    when (
-                                                        val mutation = currentServiceState?.createChannelWithVoice(
-                                                            implementationId = descriptor.implementationId,
-                                                            name = creatingDisplayName,
-                                                            payload = payload,
-                                                            voiceProfileId = profileId,
-                                                            acknowledgeUnverified = acknowledgeUnverified,
-                                                        )
-                                                    ) {
-                                                        is ChannelVoicePreferenceMutation.Committed -> {
-                                                            actions.navigateBack()
-                                                            ChannelConfigurationSubmitResult.Success
-                                                        }
-                                                        is ChannelVoicePreferenceMutation.VoiceRefused -> {
-                                                            when (val failure = mutation.failure) {
-                                                                is ChannelVoicePreferenceFailure.UnverifiedRequiresAcknowledgement -> {
-                                                                    ChannelConfigurationSubmitResult.UnverifiedAcknowledgementRequired(
-                                                                        profileId = failure.profileId,
-                                                                        displayName = failure.displayName,
-                                                                        diagnostic = failure.diagnostic,
-                                                                    )
-                                                                }
-                                                                else -> {
-                                                                    ChannelConfigurationSubmitResult.Error(failure.diagnostic)
-                                                                }
-                                                            }
-                                                        }
-                                                        is ChannelVoicePreferenceMutation.ChannelRefused -> {
-                                                            ChannelConfigurationSubmitResult.Error(mutation.error.message)
-                                                        }
-                                                        null -> {
-                                                            val err = actions.createChannel(
-                                                                descriptor.implementationId,
-                                                                creatingDisplayName,
-                                                                payload,
-                                                             )
-                                                            if (err == null) {
-                                                                actions.navigateBack()
-                                                                ChannelConfigurationSubmitResult.Success
-                                                            } else {
-                                                                ChannelConfigurationSubmitResult.Error(err)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                null
-                                            },
-                                         )
-                                    }
-                                }
-
-                                DashboardRoute.LogAnalysis -> {
-                                    LogAnalysisScreen(
-                                        entries = logEntries,
-                                        onClear = { currentServiceState?.clearLogs() },
-                                        onSetGlobalLevel = { level ->
-                                            currentServiceState?.setGlobalLogLevel(level)
-                                        },
-                                        onSetTagLevel = { tag, level ->
-                                            currentServiceState?.setTagLogLevel(tag, level)
-                                        },
-                                        onClearTagLevel = { tag ->
-                                            currentServiceState?.clearTagLogLevel(tag)
-                                        },
-                                        currentGlobalLevel = currentGlobalLevel,
-                                        tagLevels = currentTagLevels,
+                                } else {
+                                    SettingsHomeScreen(
+                                        onRsmClick = actions::navigateToRsmSetup,
+                                        onCarClick = actions::navigateToCarSetup,
+                                        onChannelManagementClick = actions::navigateToChannelManagement,
+                                        onInstalledProvidersClick = actions::navigateToPackageManagement,
+                                        onProviderProfilesClick = actions::navigateToGenericProfiles,
+                                        onVoiceProfilesClick = actions::navigateToVoiceProfiles,
+                                        onLogsClick = actions::navigateToLogAnalysis,
+                                        onSystemReadinessClick = actions::navigateToSystemReadiness,
+                                        permissionsReady = permissionsReady,
+                                        modelsReady = modelsReady,
+                                        voiceReady = voiceReady,
+                                        storageReady = storageReady,
                                     )
                                 }
-
-
-                                DashboardRoute.PackageManagement -> {
-                                    PackageManagementScreen(
-                                        summary = packageManagementSummary,
-                                        profileState = genericProfileState,
-                                        actions = actions,
-                                    )
-                                }
-
-                                DashboardRoute.GenericProfiles -> GenericProfileManagementScreen(
-                                    state = genericProfileState,
-                                    actions = actions,
-                                )
-                                DashboardRoute.VoiceProfiles -> io.talkcan.ui.VoiceProfileManagementScreen(
-                                    catalogue = voiceProfileCatalogue,
-                                    editorState = voiceProfileEditorState,
-                                    onSelectSources = { ids, discard ->
-                                        currentServiceState?.selectVoiceProfileSources(ids.map { it.value }, discard)
-                                    },
-                                    onSetEqualWeights = {
-                                        currentServiceState?.setVoiceProfileEqualWeights()
-                                    },
-                                    onSetManualWeights = { weights ->
-                                        currentServiceState?.setVoiceProfileManualWeights(weights)
-                                    },
-                                    onSetRandomWeights = { seed ->
-                                        currentServiceState?.setVoiceProfileRandomWeights(seed)
-                                    },
-                                    onApplyOperation = { op ->
-                                        currentServiceState?.applyVoiceProfileOperation(op)
-                                    },
-                                    onUndoOperation = {
-                                        currentServiceState?.undoVoiceProfileOperation()
-                                    },
-                                    onResetDraft = {
-                                        currentServiceState?.resetVoiceProfileDraft()
-                                    },
-                                    onAcknowledgeFailure = {
-                                        currentServiceState?.acknowledgeVoiceProfileFailure()
-                                    },
-                                    onSaveDraftAsNew = { name ->
-                                        currentServiceState?.saveVoiceProfileDraftAsNew(name)
-                                    },
-                                    onRenameProfile = { id, name ->
-                                        currentServiceState?.renameVoiceProfile(id.value, name)
-                                    },
-                                    onDeleteProfile = { id ->
-                                        currentServiceState?.deleteVoiceProfile(id.value)
-                                    },
-                                    onImportProfile = { name ->
-                                        pendingImportDisplayName = name
-                                        importProfileLauncher.launch(arrayOf("application/json", "*/*"))
-                                    },
-                                    onExportProfile = { id, filename ->
-                                        pendingExportProfileId = id
-                                        exportProfileLauncher.launch(filename)
-                                    },
-                                    onPreviewDraft = { text ->
-                                        currentServiceState?.previewVoiceProfileDraft(text)
-                                    },
-                                    onCancelPreview = {
-                                        currentServiceState?.cancelVoiceProfilePreview()
-                                    },
-                                    onExitEditor = {
-                                        currentServiceState?.exitVoiceProfileEditor()
-                                    },
-                                )
                             }
                         }
+                    }
                     }
                     }
                 }
             }
         }
+    }
     }
 
     override fun onStart() {
@@ -844,18 +1061,6 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    private enum class DashboardRoute {
-        Main,
-        Connection,
-        Monitor,
-        CarConfiguration,
-        ChannelConfiguration,
-        ChannelCreation,
-        LogAnalysis,
-        PackageManagement,
-        GenericProfiles,
-        VoiceProfiles,
-    }
 
 }
 

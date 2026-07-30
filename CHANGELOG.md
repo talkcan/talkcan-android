@@ -17,6 +17,9 @@ All notable changes to Talkcan are documented in this file.
   graphite surfaces, aluminum copy, amber voice routes, and cyan status.
 - Added reusable instrument panels, route-status badges, technical typography,
   calibration grid lines, and contrast-safe system bars.
+- Added first-class Radio and Settings navigation, relocated app-wide
+  configuration, selection-only channel and audio-device controls, and a
+  fixed accessible phone PTT dock with strict press-and-hold behavior.
 
 ### Fixed
 

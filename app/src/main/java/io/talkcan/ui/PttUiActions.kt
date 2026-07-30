@@ -27,9 +27,12 @@ interface PttUiActions {
     fun disconnectSerial()
     fun setActiveChannel(id: String)
     fun setInputMode(mode: InputMode)
+    fun navigateToRadio()
+    fun navigateToSettingsHome()
     fun navigateToRsmSetup()
     fun navigateToCarSetup()
     fun navigateToChannelConfiguration(channelId: String)
+    fun navigateToChannelManagement()
     fun navigateToChannelCreation(implementationId: ChannelImplementationId, displayName: String)
     fun navigateBack()
     fun navigateToLogAnalysis()
@@ -81,4 +84,6 @@ interface PttUiActions {
     fun deleteGenericProfile(profileId: ProfileId)
     /** Navigate to the voice-profile management and mixer surface (Task 5.1). */
     fun navigateToVoiceProfiles()
+    /** Navigate to system readiness screen. */
+    fun navigateToSystemReadiness()
 }

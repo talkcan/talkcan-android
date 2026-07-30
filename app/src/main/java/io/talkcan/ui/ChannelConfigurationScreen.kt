@@ -9,25 +9,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,7 +53,6 @@ import org.json.JSONObject
 /** A host-produced directory selection addressed by one configuration owner and field ID. */
 data class DirectorySelection(val ownerId: String, val fieldId: String, val path: String)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChannelConfigurationScreen(
     title: String,
@@ -78,7 +70,6 @@ fun ChannelConfigurationScreen(
     onPickDirectory: (String, String) -> Unit,
     mountEntries: List<MountEditorEntry> = emptyList(),
     onPickMount: (MountSelectionRequest) -> Unit = {},
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     synthesisVoiceChoices: List<ChannelSynthesisVoiceChoice> = emptyList(),
     initialSynthesisVoiceProfileId: String? = null,
@@ -111,183 +102,167 @@ fun ChannelConfigurationScreen(
         }
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            TerminalHeader(
-                title = title,
-                subtitle = "Review and adjust the settings below, then save your changes.",
-            )
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        TerminalHeader(
+            title = title,
+            subtitle = "Review and adjust the settings below, then save your changes.",
+        )
 
-            if (descriptor.configurationFields.isEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Text(
-                        text = "No configuration required",
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        TalkcanSectionHeader(
-                            title = "Channel settings",
-                            supportingText = "Values required by this channel provider.",
-                        )
-                        descriptor.configurationFields.forEach { field ->
-                            if (field.isVisible(values)) {
-                                ChannelConfigurationFieldEditor(
-                                    field = field,
-                                    configurationOwnerId = configurationOwnerId,
-                                    value = values[field.id],
-                                    dependencyValue = (field as? ChannelConfigurationField.DynamicChoiceField)
-                                        ?.dependsOnFieldId
-                                        ?.let(values::get),
-                                    choiceResolver = choiceResolver,
-                                    onValueChange = { newValue ->
-                                        applyExplicitFieldEdit(
-                                            descriptor.configurationFields,
-                                            values,
-                                            field.id,
-                                            newValue,
-                                        )
-                                        submissionError = null
-                                    },
-                                    onPickDirectory = onPickDirectory,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (descriptor.requiredCapabilities.contains(ChannelCapability.Synthesis) && synthesisVoiceChoices.isNotEmpty()) {
-                SynthesisVoiceSelectorCard(
-                    choices = synthesisVoiceChoices,
-                    selectedProfileId = selectedSynthesisVoiceId,
-                    onSelectProfileId = { newId ->
-                        selectedSynthesisVoiceId = newId
-                        submissionError = null
-                    },
+        if (descriptor.configurationFields.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Text(
+                    text = "No configuration required",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            if (mountEntries.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        TalkcanSectionHeader(
-                            title = "Resource directories",
-                            supportingText = "Folders this channel needs to read from.",
-                        )
-                        mountEntries.forEach { entry ->
-                            ResourceMountEditorRow(
-                                entry = entry,
-                                onPickMount = {
-                                    onPickMount(
-                                        MountSelectionRequest(
-                                            ownerInstanceId = configurationOwnerId,
-                                            implementationId = descriptor.implementationId,
-                                            declarationId = entry.declaration.declarationId,
-                                        ),
+                    TalkcanSectionHeader(
+                        title = "Channel settings",
+                        supportingText = "Values required by this channel provider.",
+                    )
+                    descriptor.configurationFields.forEach { field ->
+                        if (field.isVisible(values)) {
+                            ChannelConfigurationFieldEditor(
+                                field = field,
+                                configurationOwnerId = configurationOwnerId,
+                                value = values[field.id],
+                                dependencyValue = (field as? ChannelConfigurationField.DynamicChoiceField)
+                                    ?.dependsOnFieldId
+                                    ?.let(values::get),
+                                choiceResolver = choiceResolver,
+                                onValueChange = { newValue ->
+                                    applyExplicitFieldEdit(
+                                        descriptor.configurationFields,
+                                        values,
+                                        field.id,
+                                        newValue,
                                     )
+                                    submissionError = null
                                 },
+                                onPickDirectory = onPickDirectory,
                             )
                         }
                     }
                 }
             }
+        }
 
-            submissionError?.let { error ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                    ),
+        if (descriptor.requiredCapabilities.contains(ChannelCapability.Synthesis) && synthesisVoiceChoices.isNotEmpty()) {
+            SynthesisVoiceSelectorCard(
+                choices = synthesisVoiceChoices,
+                selectedProfileId = selectedSynthesisVoiceId,
+                onSelectProfileId = { newId ->
+                    selectedSynthesisVoiceId = newId
+                    submissionError = null
+                },
+            )
+        }
+
+        if (mountEntries.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TalkcanStatusBadge(
-                            label = "Error",
-                            tone = TalkcanStatusTone.Error,
-                        )
-                        Text(
-                            text = error,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyMedium,
+                    TalkcanSectionHeader(
+                        title = "Resource directories",
+                        supportingText = "Folders this channel needs to read from.",
+                    )
+                    mountEntries.forEach { entry ->
+                        ResourceMountEditorRow(
+                            entry = entry,
+                            onPickMount = {
+                                onPickMount(
+                                    MountSelectionRequest(
+                                        ownerInstanceId = configurationOwnerId,
+                                        implementationId = descriptor.implementationId,
+                                        declarationId = entry.declaration.declarationId,
+                                    ),
+                                )
+                            },
                         )
                     }
                 }
             }
+        }
 
-            Button(
-                onClick = {
-                    val payload = payloadWithFieldValues(initialPayload, descriptor.configurationFields, values)
-                    if (descriptor.requiredCapabilities.contains(ChannelCapability.Synthesis) && onCommitWithVoice != null) {
-                        when (val result = onCommitWithVoice(payload, selectedSynthesisVoiceId, false)) {
-                            is ChannelConfigurationSubmitResult.Success -> {
-                                submissionError = null
-                            }
-                            is ChannelConfigurationSubmitResult.Error -> {
-                                submissionError = result.message
-                            }
-                            is ChannelConfigurationSubmitResult.UnverifiedAcknowledgementRequired -> {
-                                unverifiedDialogState = result
-                            }
-                        }
-                    } else {
-                        submissionError = onSubmit(payload)
-                    }
-                },
+        submissionError?.let { error ->
+            Card(
                 modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
             ) {
-                Text(submitLabel, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TalkcanStatusBadge(
+                        label = "Error",
+                        tone = TalkcanStatusTone.Error,
+                    )
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
-    }
 
+        Button(
+            onClick = {
+                val payload = payloadWithFieldValues(initialPayload, descriptor.configurationFields, values)
+                if (descriptor.requiredCapabilities.contains(ChannelCapability.Synthesis) && onCommitWithVoice != null) {
+                    when (val result = onCommitWithVoice(payload, selectedSynthesisVoiceId, false)) {
+                        is ChannelConfigurationSubmitResult.Success -> {
+                            submissionError = null
+                        }
+                        is ChannelConfigurationSubmitResult.Error -> {
+                            submissionError = result.message
+                        }
+                        is ChannelConfigurationSubmitResult.UnverifiedAcknowledgementRequired -> {
+                            unverifiedDialogState = result
+                        }
+                    }
+                } else {
+                    submissionError = onSubmit(payload)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(submitLabel, fontWeight = FontWeight.Bold)
+        }
+    }
     unverifiedDialogState?.let { dialogState ->
         AlertDialog(
             onDismissRequest = {

@@ -431,7 +431,7 @@ private fun TrustConfirmation(
 private fun InstallCompleteNotice(actions: PttUiActions) {
     Text(
         "Package installed successfully. The provider is now available in the catalogue. " +
-            "Create a channel instance from the dashboard's channel management panel.",
+            "Create a channel instance from Settings > Channel management.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.primary,
     )
