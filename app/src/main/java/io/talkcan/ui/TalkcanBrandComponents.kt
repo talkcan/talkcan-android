@@ -100,16 +100,21 @@ internal fun TalkcanInstrumentPanel(
 internal fun TalkcanBrandLabel(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onBackground,
+    compact: Boolean = false,
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TalkcanMark(modifier = Modifier.size(42.dp))
+        TalkcanMark(modifier = Modifier.size(if (compact) 32.dp else 42.dp))
         Text(
             text = "TALKCAN",
-            style = MaterialTheme.typography.displaySmall,
+            style = if (compact) {
+                MaterialTheme.typography.titleMedium
+            } else {
+                MaterialTheme.typography.displaySmall
+            },
             color = color,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 2.sp,
@@ -228,6 +233,7 @@ internal fun TalkcanSectionHeader(
     supportingText: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    compact: Boolean = false,
 ) {
     Row(
         modifier = modifier,
@@ -242,18 +248,26 @@ internal fun TalkcanSectionHeader(
         )
         androidx.compose.foundation.layout.Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 2.dp),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = if (compact) {
+                    MaterialTheme.typography.titleMedium
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp,
             )
             supportingText?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = if (compact) {
+                        MaterialTheme.typography.bodySmall
+                    } else {
+                        MaterialTheme.typography.bodyMedium
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

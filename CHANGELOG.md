@@ -13,6 +13,11 @@ All notable changes to Talkcan are documented in this file.
 - Added first-class Radio and Settings navigation, relocated app-wide
   configuration, selection-only channel and audio-device controls, and a
   fixed accessible phone PTT dock with strict press-and-hold behavior.
+- Compacted Radio and Settings, removed the duplicate current-channel summary,
+  strengthened selection and readiness states, and made phone PTT a filled
+  action with explicit destination and release guidance.
+- Kept the audio-device selector fixed above phone PTT and replaced it in place
+  with a talk-level meter using the same header and 96 dp card geometry.
 
 ### Fixed
 

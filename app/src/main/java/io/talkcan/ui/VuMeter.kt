@@ -193,4 +193,4 @@ private val QUANTUM: Float = 0.05f
 private val SEGMENT_HEIGHT = 14.dp
 private val LOW_ZONE_OPACITY: Float = 0.55f
 private val TRACK_OPACITY: Float = 0.18f
-private val IDLE_TRACK_OPACITY: Float = 0.10f
+private val IDLE_TRACK_OPACITY: Float = 0.18f
