@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,18 +49,15 @@ fun SettingsHomeScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        TerminalHeader(
-            title = "Settings",
-            subtitle = "Configure devices, channels, integrations, and system defaults.",
-        )
+        TalkcanBrandLabel(compact = true)
 
         // Group 1: Devices and audio
         SettingsGroup(
             title = "Devices and audio",
-            supportingText = "Manage radio hardware, headset connections, and output endpoints."
+            supportingText = "Radio, car, and phone audio routes."
         ) {
             SettingsRow(
                 label = "Radio",
@@ -72,7 +73,7 @@ fun SettingsHomeScreen(
             )
             SettingsRow(
                 label = "Phone",
-                statusText = "Integrated speaker and microphone",
+                statusText = "Built in · no setup required",
                 enabled = false,
                 onClick = null
             )
@@ -81,7 +82,7 @@ fun SettingsHomeScreen(
         // Group 2: Channels
         SettingsGroup(
             title = "Channels",
-            supportingText = "Manage voice channel assignments and catalogue definitions."
+            supportingText = "Channel catalogue and assignments."
         ) {
             SettingsRow(
                 label = "Channel management",
@@ -94,7 +95,7 @@ fun SettingsHomeScreen(
         // Group 3: Integrations and profiles
         SettingsGroup(
             title = "Integrations and profiles",
-            supportingText = "Manage third-party provider packages, metadata profiles, and speech synthesizers."
+            supportingText = "Provider packages, profiles, and voices."
         ) {
             SettingsRow(
                 label = "Installed providers",
@@ -119,7 +120,7 @@ fun SettingsHomeScreen(
         // Group 4: System
         SettingsGroup(
             title = "System",
-            supportingText = "Verify runtime host environment prerequisites."
+            supportingText = "Permissions, models, voice, and storage."
         ) {
             SettingsRow(
                 label = "Permissions",
@@ -150,7 +151,7 @@ fun SettingsHomeScreen(
         // Group 5: Advanced
         SettingsGroup(
             title = "Advanced",
-            supportingText = "Developer troubleshooting and diagnostics."
+            supportingText = "Diagnostics and troubleshooting."
         ) {
             SettingsRow(
                 label = "Diagnostic logs",
@@ -177,16 +178,17 @@ private fun SettingsGroup(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             TalkcanSectionHeader(
                 title = title,
                 supportingText = supportingText,
+                compact = true,
             )
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 content()
             }
@@ -201,7 +203,7 @@ private fun ColumnScope.SettingsRow(
     enabled: Boolean,
     onClick: (() -> Unit)?,
 ) {
-    val contentAlpha = if (enabled) 1f else 0.38f
+    val contentAlpha = if (enabled) 1f else 0.78f
     val rowModifier = Modifier
         .fillMaxWidth()
         .then(
@@ -217,7 +219,7 @@ private fun ColumnScope.SettingsRow(
             }
         }
         .testTag("settings-row-${label}")
-        .padding(vertical = 12.dp, horizontal = 4.dp)
+        .padding(vertical = 8.dp, horizontal = 2.dp)
 
     Row(
         modifier = rowModifier,
@@ -234,17 +236,17 @@ private fun ColumnScope.SettingsRow(
             if (statusText != null) {
                 Text(
                     text = statusText,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
             }
         }
         if (enabled && onClick != null) {
-            Text(
-                text = "→",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp),
             )
         }
     }

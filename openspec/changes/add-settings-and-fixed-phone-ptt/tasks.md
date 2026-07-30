@@ -51,3 +51,27 @@
 - [x] 7.2 Add navigation-state tests covering Radio/Settings switching, Settings-child Back behavior, and preservation of active channel and selected audio device.
 - [x] 7.3 Add Compose interaction tests proving channel rows select without starting PTT, device tiles have no hidden setup gesture, Settings destinations are reachable, and the PTT dock bounds remain stable while content scrolls.
 - [ ] 7.4 Run the targeted unit and instrumentation tests covering navigation, dashboard, input-mode auto-switch, PTT routing, and playback routing, then run the application build.
+
+## 8. Visual Refinement
+
+- [x] 8.1 Compact the Radio header, section spacing, meter card, device tiles,
+  and fixed dock so the active channel list remains visible at first launch.
+- [x] 8.2 Remove the duplicate current-channel summary; keep the selected
+  channel visible and visually distinct in the channel list.
+- [x] 8.3 Give the fixed phone PTT a distinct filled-action treatment, icon,
+  destination, release guidance, and phase-specific colors.
+- [x] 8.4 Use consistent blue selection, green readiness, yellow pending, and
+  red recording semantics across status badges, device tiles, and root
+  navigation.
+- [x] 8.5 Keep standby and disabled labels readable without implying that
+  unavailable controls are actionable.
+- [x] 8.6 Replace misleading unavailable-device setup labels with explicit
+  availability states while keeping setup in Settings.
+- [x] 8.7 Compact Settings headers, groups, and rows; replace text arrows with
+  standard directional icons and explain the built-in Phone row.
+- [x] 8.8 Install the app and visually verify Radio and Settings on the target
+  Android device at its native viewport.
+- [x] 8.9 Place audio-device selection and the talk-level meter in one fixed
+  slot immediately above phone PTT, showing the meter only while capturing.
+- [x] 8.10 Give the talk-level meter and audio-route buttons the same content
+  height and shared header/card geometry within the fixed operational slot.

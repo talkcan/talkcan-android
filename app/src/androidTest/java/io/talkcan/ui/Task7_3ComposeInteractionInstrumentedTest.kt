@@ -433,6 +433,7 @@ class Task7_3ComposeInteractionInstrumentedTest {
         }
         val descriptors = listOf(createMockDescriptor("built-in:journal"))
         val actions = FakePttUiActions()
+        var isCapturing by androidx.compose.runtime.mutableStateOf(false)
 
         var appState by androidx.compose.runtime.mutableStateOf(
             AppState(
@@ -450,7 +451,7 @@ class Task7_3ComposeInteractionInstrumentedTest {
                     MainDashboardScreen(
                         appState = appState,
                         level = 0.0f,
-                        isCapturing = false,
+                        isCapturing = isCapturing,
                         providerDescriptors = descriptors,
                         actions = actions,
                         modifier = Modifier.fillMaxSize()
@@ -458,9 +459,17 @@ class Task7_3ComposeInteractionInstrumentedTest {
                 }
             }
         }
+        composeRule.onNodeWithText("Audio device").assertIsDisplayed()
+        composeRule.onNodeWithText("Talk level").assertDoesNotExist()
 
         // Measure initial dock position and bounds
         val initialBounds = composeRule.onNodeWithTag("phone-ptt-dock").getUnclippedBoundsInRoot()
+        val initialPanelBounds = composeRule
+            .onNodeWithTag("dashboard-operational-panel")
+            .getUnclippedBoundsInRoot()
+        val initialRouteButtonBounds = composeRule
+            .onNodeWithTag("device-tile-OnAPinch")
+            .getUnclippedBoundsInRoot()
 
         // 1. Scroll the dashboard
         composeRule.onNode(hasScrollAction()).performTouchInput {
@@ -470,6 +479,10 @@ class Task7_3ComposeInteractionInstrumentedTest {
 
         val boundsAfterScroll = composeRule.onNodeWithTag("phone-ptt-dock").getUnclippedBoundsInRoot()
         assertBoundsEqual(initialBounds, boundsAfterScroll)
+        val panelBoundsAfterScroll = composeRule
+            .onNodeWithTag("dashboard-operational-panel")
+            .getUnclippedBoundsInRoot()
+        assertBoundsEqual(initialPanelBounds, panelBoundsAfterScroll)
 
         // 2. Perform selection update (activeChannelId change)
         appState = appState.copy(activeChannelId = "ch-2")
@@ -477,8 +490,13 @@ class Task7_3ComposeInteractionInstrumentedTest {
 
         val boundsAfterSelection = composeRule.onNodeWithTag("phone-ptt-dock").getUnclippedBoundsInRoot()
         assertBoundsEqual(initialBounds, boundsAfterSelection)
+        val panelBoundsAfterSelection = composeRule
+            .onNodeWithTag("dashboard-operational-panel")
+            .getUnclippedBoundsInRoot()
+        assertBoundsEqual(initialPanelBounds, panelBoundsAfterSelection)
 
         // 3. Perform state update (pttAudioState change to recording)
+        isCapturing = true
         appState = appState.copy(
             pttAudioState = PttAudioOperationState(
                 source = PttSource.Phone,
@@ -490,10 +508,25 @@ class Task7_3ComposeInteractionInstrumentedTest {
         composeRule.waitForIdle()
 
         // Verify the dock text actually updated
-        composeRule.onNodeWithText("Recording...").assertIsDisplayed()
+        composeRule.onNodeWithText("Release to send").assertIsDisplayed()
+        composeRule.onNodeWithText("Talk level").assertIsDisplayed()
+        composeRule.onNodeWithText("Audio device").assertDoesNotExist()
+        val talkLevelBounds = composeRule
+            .onNodeWithTag("talk-level-card")
+            .getUnclippedBoundsInRoot()
+        assertEquals(
+            "Talk-level card must match route-button height",
+            initialRouteButtonBounds.bottom.value - initialRouteButtonBounds.top.value,
+            talkLevelBounds.bottom.value - talkLevelBounds.top.value,
+            0.1f,
+        )
 
         val boundsAfterStateUpdate = composeRule.onNodeWithTag("phone-ptt-dock").getUnclippedBoundsInRoot()
         assertBoundsEqual(initialBounds, boundsAfterStateUpdate)
+        val panelBoundsAfterStateUpdate = composeRule
+            .onNodeWithTag("dashboard-operational-panel")
+            .getUnclippedBoundsInRoot()
+        assertBoundsEqual(initialPanelBounds, panelBoundsAfterStateUpdate)
     }
 
     private fun assertBoundsEqual(expected: DpRect, actual: DpRect) {
