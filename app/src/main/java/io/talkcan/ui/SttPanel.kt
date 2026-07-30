@@ -1,6 +1,8 @@
 package io.talkcan.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -23,15 +25,38 @@ internal fun SttPanel(state: MonitorState) {
         SttStatus.Idle -> if (transcript.isBlank()) "No transcript yet" else transcript
         else -> statusText
     }
+    val tone = when (state.sttStatus) {
+        SttStatus.Recording -> TalkcanStatusTone.Recording
+        SttStatus.Transcribing -> TalkcanStatusTone.Active
+        is SttStatus.Transcribed -> TalkcanStatusTone.Ready
+        is SttStatus.Error -> TalkcanStatusTone.Error
+        SttStatus.EmptyAudio -> TalkcanStatusTone.Error
+        SttStatus.Cancelled -> TalkcanStatusTone.Neutral
+        SttStatus.Idle -> TalkcanStatusTone.Neutral
+        else -> TalkcanStatusTone.Attention
+    }
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = boxText,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(12.dp),
-        )
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(title = "Speech to text")
+            TalkcanStatusBadge(
+                label = statusText,
+                tone = tone,
+            )
+            Text(
+                text = boxText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }

@@ -2,6 +2,21 @@
 
 All notable changes to Talkcan are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Rebuilt the Android interface around Talkcan's warm-light can-and-string
+  identity, with clearer channel, connection, setup, package, profile, and
+  diagnostic workflows.
+- Added branded launcher, notification, and Android Auto artwork; accessible
+  state badges; edge-to-edge inset handling; and contrast-safe semantic colors.
+
+### Fixed
+
+- Refreshed built-in voice profile availability after model acquisition so
+  the ten shipped voices cannot remain incorrectly marked as missing.
+
 ## [0.10.0] - 2026-07-29
 
 ### Added

@@ -26,8 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.talkcan.ui.theme.AlertAmber
-import io.talkcan.ui.theme.ChakraPetch
+import io.talkcan.ui.theme.CanRed
+import io.talkcan.ui.theme.SignalGreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.round
@@ -35,7 +35,7 @@ import kotlin.math.round
 /**
  * VU meter Composable — renders a live audio-level indicator driven by the capture service's
  * `level` signal. Always mounted in the dashboard layout; when not capturing the meter shows a
- * dim empty track and a "STANDBY" label, so the layout does not shift when capture starts/stops
+ * dim empty track and a "Standby" label, so the layout does not shift when capture starts/stops
  * (shifting would reflow the channel cards and make the On-a-pinch PTT target unusable).
  *
  * Behavior (see `vu-meter` spec / change design):
@@ -44,10 +44,9 @@ import kotlin.math.round
  *   real speech produces from the normalized capture signal.
  * - VU ballistics computed locally: fast attack (~30ms), slower release (~200ms), peak-hold
  *   marker (~800ms hold then decay). Implemented in [VuMeterEngine] (pure Kotlin, unit-tested).
- * - Three palette-conformant zones (low dim / good transmit / clip amber); each segment keeps
+ * - Three palette-conformant zones (low dim / good transmit / clip red); each segment keeps
  *   its zone color so the fill's top indicates the current zone.
- * - Field-terminal segmented bar aesthetic (no off-palette traffic-light gradient). Chakra Petch
- *   for any markings/labels.
+ * - Segmented bar aesthetic using Talkcan palette colors and theme typography for markings.
  */
 @Composable
 fun VuMeter(
@@ -119,16 +118,14 @@ fun VuMeter(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "MIC",
+                text = "Mic",
                 style = MaterialTheme.typography.labelLarge,
-                fontFamily = ChakraPetch,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = if (isCapturing) zoneLabel(engineState.zone) else "STANDBY",
+                text = if (isCapturing) zoneLabel(engineState.zone) else "Standby",
                 style = MaterialTheme.typography.labelLarge,
-                fontFamily = ChakraPetch,
                 fontWeight = FontWeight.SemiBold,
                 color = zoneLabelColor,
             )
@@ -174,8 +171,8 @@ private fun zoneForSegment(segmentLower: Float, segmentUpper: Float): VuZone {
 @Composable
 private fun zoneColor(zone: VuZone): Color = when (zone) {
     VuZone.LOW -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = LOW_ZONE_OPACITY)
-    VuZone.GOOD -> MaterialTheme.colorScheme.primary
-    VuZone.CLIP -> AlertAmber
+    VuZone.GOOD -> SignalGreen
+    VuZone.CLIP -> CanRed
 }
 
 @Composable
@@ -185,9 +182,9 @@ private fun trackColor(): Color = MaterialTheme.colorScheme.onSurfaceVariant.cop
 private fun idleTrackColor(): Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = IDLE_TRACK_OPACITY)
 
 private fun zoneLabel(zone: VuZone): String = when (zone) {
-    VuZone.LOW -> "LOW"
-    VuZone.GOOD -> "GOOD"
-    VuZone.CLIP -> "CLIP"
+    VuZone.LOW -> "Low"
+    VuZone.GOOD -> "Clear"
+    VuZone.CLIP -> "Too loud"
 }
 
 private val TICK_MS: Long = 16L

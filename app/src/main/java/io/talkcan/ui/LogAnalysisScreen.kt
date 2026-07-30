@@ -1,5 +1,6 @@
 package io.talkcan.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,10 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -19,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -104,20 +104,19 @@ fun LogAnalysisScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        TerminalHeader(
+            title = "Activity log",
+            subtitle = "Browse, filter, and configure diagnostic logs from the running service.",
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "Log Analysis",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { fontSizeScale = (fontSizeScale - 0.1f).coerceIn(0.5f, 2.0f) }) {
                     Text("A-")
@@ -125,17 +124,17 @@ fun LogAnalysisScreen(
                 TextButton(onClick = { fontSizeScale = (fontSizeScale + 0.1f).coerceIn(0.5f, 2.0f) }) {
                     Text("A+")
                 }
-                IconButton(onClick = {
+                TextButton(onClick = {
                     formatMode = if (formatMode == LogFormatMode.Compact) LogFormatMode.Detailed else LogFormatMode.Compact
                 }) {
                     Text(
-                        text = if (formatMode == LogFormatMode.Compact) "D" else "C",
+                        text = if (formatMode == LogFormatMode.Compact) "Detailed" else "Compact",
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
-                IconButton(onClick = onClear) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear logs")
-                }
+            }
+            IconButton(onClick = onClear) {
+                Icon(Icons.Default.Clear, contentDescription = "Clear logs")
             }
         }
 
@@ -147,113 +146,152 @@ fun LogAnalysisScreen(
             singleLine = true,
         )
 
-        Row(
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            LogLevel.entries.forEach { level ->
-                FilterChip(
-                    selected = level in selectedLevels,
-                    onClick = {
-                        selectedLevels = if (level in selectedLevels) {
-                            selectedLevels - level
-                        } else {
-                            selectedLevels + level
-                        }
-                    },
-                    label = { Text(level.label, fontSize = tagFontSize) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        labelColor = if (level in selectedLevels) Color.White else levelColor(level),
-                    ),
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box {
-                TextButton(onClick = { tagDropdownExpanded = true }) {
-                    Text(selectedTag ?: "All tags")
-                }
-                DropdownMenu(
-                    expanded = tagDropdownExpanded,
-                    onDismissRequest = { tagDropdownExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("All tags") },
-                        onClick = {
-                            selectedTag = null
-                            tagDropdownExpanded = false
-                        },
-                    )
-                    allTags.forEach { tag ->
-                        DropdownMenuItem(
-                            text = { Text(tag) },
-                            onClick = {
-                                selectedTag = tag
-                                tagDropdownExpanded = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            TextButton(onClick = { levelConfigExpanded = !levelConfigExpanded }) {
-                Text("Levels ▾")
-            }
-        }
-
-        if (levelConfigExpanded) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("Global level: ${currentGlobalLevel.label}", style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Filter by level",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     LogLevel.entries.forEach { level ->
-                        AssistChip(
-                            onClick = { onSetGlobalLevel(level) },
+                        FilterChip(
+                            selected = level in selectedLevels,
+                            onClick = {
+                                selectedLevels = if (level in selectedLevels) {
+                                    selectedLevels - level
+                                } else {
+                                    selectedLevels + level
+                                }
+                            },
                             label = { Text(level.label, fontSize = tagFontSize) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = if (level == currentGlobalLevel) levelColor(level) else Color.Transparent,
-                                labelColor = if (level == currentGlobalLevel) Color.White else levelColor(level),
+                            colors = FilterChipDefaults.filterChipColors(
+                                labelColor = if (level in selectedLevels) Color.White else levelColor(level),
                             ),
                         )
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider()
 
-                if (allTags.isNotEmpty()) {
-                    Text("Per-tag overrides:", style = MaterialTheme.typography.labelMedium)
-                    allTags.forEach { tag ->
-                        val tagLevel = tagLevels[tag]
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box {
+                        TextButton(onClick = { tagDropdownExpanded = true }) {
+                            Text(selectedTag ?: "All tags")
+                        }
+                        DropdownMenu(
+                            expanded = tagDropdownExpanded,
+                            onDismissRequest = { tagDropdownExpanded = false },
                         ) {
-                            Text(tag, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                LogLevel.entries.forEach { level ->
-                                    AssistChip(
-                                        onClick = { onSetTagLevel(tag, level) },
-                                        label = { Text(level.label, fontSize = (8 * fontSizeScale).sp) },
-                                        colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = if (level == tagLevel) levelColor(level) else Color.Transparent,
-                                            labelColor = if (level == tagLevel) Color.White else levelColor(level),
-                                        ),
-                                    )
-                                }
-                                if (tagLevel != null) {
-                                    TextButton(onClick = { onClearTagLevel(tag) }) {
-                                        Text("×", fontSize = (10 * fontSizeScale).sp)
+                            DropdownMenuItem(
+                                text = { Text("All tags") },
+                                onClick = {
+                                    selectedTag = null
+                                    tagDropdownExpanded = false
+                                },
+                            )
+                            allTags.forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text(tag) },
+                                    onClick = {
+                                        selectedTag = tag
+                                        tagDropdownExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    TextButton(onClick = { levelConfigExpanded = !levelConfigExpanded }) {
+                        Text(if (levelConfigExpanded) "Hide level config" else "Configure levels")
+                    }
+                }
+            }
+        }
+
+        if (levelConfigExpanded) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "Global level: ${currentGlobalLevel.label}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LogLevel.entries.forEach { level ->
+                            AssistChip(
+                                onClick = { onSetGlobalLevel(level) },
+                                label = { Text(level.label, fontSize = tagFontSize) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = if (level == currentGlobalLevel) levelColor(level) else Color.Transparent,
+                                    labelColor = if (level == currentGlobalLevel) Color.White else levelColor(level),
+                                ),
+                            )
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    if (allTags.isNotEmpty()) {
+                        Text(
+                            "Per-tag overrides",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        allTags.forEach { tag ->
+                            val tagLevel = tagLevels[tag]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    tag,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    LogLevel.entries.forEach { level ->
+                                        AssistChip(
+                                            onClick = { onSetTagLevel(tag, level) },
+                                            label = { Text(level.label, fontSize = (8 * fontSizeScale).sp) },
+                                            colors = AssistChipDefaults.assistChipColors(
+                                                containerColor = if (level == tagLevel) levelColor(level) else Color.Transparent,
+                                                labelColor = if (level == tagLevel) Color.White else levelColor(level),
+                                            ),
+                                        )
+                                    }
+                                    if (tagLevel != null) {
+                                        TextButton(onClick = { onClearTagLevel(tag) }) {
+                                            Text("×", fontSize = (10 * fontSizeScale).sp)
+                                        }
                                     }
                                 }
                             }
@@ -263,12 +301,9 @@ fun LogAnalysisScreen(
             }
         }
 
-        HorizontalDivider()
-
-        Text(
-            text = "${filteredEntries.size} entries",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        TalkcanStatusBadge(
+            label = "${filteredEntries.size} entries",
+            tone = if (filteredEntries.isEmpty()) TalkcanStatusTone.Neutral else TalkcanStatusTone.Active,
         )
 
         LazyColumn(

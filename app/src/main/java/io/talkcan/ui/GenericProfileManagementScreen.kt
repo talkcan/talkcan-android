@@ -1,12 +1,12 @@
 package io.talkcan.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -81,15 +81,13 @@ fun GenericProfileManagementScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
-            title = "PROFILES",
-            subtitle = "Global package profiles",
-            onLongPress = {},
+            title = "Manage profiles",
+            subtitle = "Create, edit, and delete profiles for installed package types.",
         )
 
         state.failureMessage?.let { failure ->
@@ -101,16 +99,15 @@ fun GenericProfileManagementScreen(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "PROFILE TYPES",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
+            TalkcanSectionHeader(
+                title = "Profile types",
+                supportingText = "Configuration types published by installed packages.",
             )
             if (state.publishedTypes.isEmpty()) {
                 Text(
                     "No installed package publishes profile types. Install a provider package first.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             state.publishedTypes.forEach { type ->
@@ -123,16 +120,15 @@ fun GenericProfileManagementScreen(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "PROFILES",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
+            TalkcanSectionHeader(
+                title = "Profiles",
+                supportingText = "Retained profiles and their current availability.",
             )
             if (state.profiles.isEmpty()) {
                 Text(
-                    "No profiles yet.",
+                    "No profiles created yet.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             state.profiles.forEach { profile ->
@@ -181,11 +177,23 @@ private fun ProfileTypeCard(
     operationActive: Boolean,
     onCreate: () -> Unit,
 ) {
+    val hasExfiltrationRisk = type.declaresSecretsRead && type.declaresNetworkHttp
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (hasExfiltrationRisk || type.isSchemaIncompatible) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 "${type.label} (${type.identity.localTypeId})",
                 style = MaterialTheme.typography.titleMedium,
@@ -194,12 +202,12 @@ private fun ProfileTypeCard(
             Text(
                 "Source: ${type.canonicalOwner}/${type.canonicalRepository}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 "Repository ID: ${type.identity.repositoryId.value}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             type.help?.let { help ->
                 Text(help, style = MaterialTheme.typography.bodySmall)
@@ -211,9 +219,13 @@ private fun ProfileTypeCard(
                 )
             }
             // 5.5: disclose the combined exfiltration authority before profile binding.
-            if (type.declaresSecretsRead && type.declaresNetworkHttp) {
+            if (hasExfiltrationRisk) {
+                TalkcanStatusBadge(
+                    label = "Exfiltration risk",
+                    tone = TalkcanStatusTone.Error,
+                )
                 Text(
-                    "Warning: this package can read stored profile secrets and send them to any HTTPS origin.",
+                    "This package can read stored profile secrets and send them to any HTTPS origin.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold,
@@ -246,10 +258,20 @@ private fun ProfileRowCard(
     onDelete: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (profile.isUnavailable) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 profile.displayName,
                 style = MaterialTheme.typography.titleMedium,
@@ -262,14 +284,12 @@ private fun ProfileRowCard(
                     append(profile.identity.repositoryId.value)
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (profile.isUnavailable) {
-                Text(
-                    "Unavailable: ${profile.unavailableReason}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.SemiBold,
+                TalkcanStatusBadge(
+                    label = "Unavailable: ${profile.unavailableReason}",
+                    tone = TalkcanStatusTone.Error,
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -445,27 +465,29 @@ private fun ProfileForm(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TerminalHeader(
-            title = if (isEdit) "EDIT PROFILE" else "NEW PROFILE",
+            title = if (isEdit) "Edit profile" else "New profile",
             subtitle = "${type.label} — ${type.canonicalOwner}/${type.canonicalRepository}",
-            onLongPress = {},
         )
 
         Text(
             "Repository ID: ${type.identity.repositoryId.value} · Type ID: ${type.identity.localTypeId}",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // 5.5: disclose the combined exfiltration authority before profile binding.
         if (type.declaresSecretsRead && type.declaresNetworkHttp) {
+            TalkcanStatusBadge(
+                label = "Exfiltration risk",
+                tone = TalkcanStatusTone.Error,
+            )
             Text(
-                "Warning: this package declares secrets.read and network.http. Secrets stored " +
+                "This package declares secrets.read and network.http. Secrets stored " +
                     "in this profile can be read by the package and sent to any HTTPS origin.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
@@ -542,7 +564,7 @@ private fun ProfileForm(
                                 } else {
                                     KeyboardOptions.Default
                                 },
-                                supportingText = if (isNumber && data is ProfileFieldDeclaration.IntegerField) {
+                                supportingText = if (data is ProfileFieldDeclaration.IntegerField) {
                                     { Text(ProfileFormModel.numberRangeHint(data)) }
                                 } else {
                                     null
@@ -552,7 +574,7 @@ private fun ProfileForm(
                             )
                         }
                         ui.help?.let { help ->
-                            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -609,7 +631,7 @@ private fun ToggleControl(
             Text(ProfileFormModel.fieldLabel(ui, false), style = MaterialTheme.typography.bodyLarge)
         }
         ui.help?.let { help ->
-            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -635,7 +657,7 @@ private fun ChoiceControl(
             Text(selectedLabel ?: "Select…")
         }
         ui.help?.let { help ->
-            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -699,7 +721,7 @@ private fun SecretCreateControl(
             modifier = Modifier.fillMaxWidth(),
         )
         ui.help?.let { help ->
-            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -766,7 +788,7 @@ private fun SecretEditControl(
             }
         }
         ui.help?.let { help ->
-            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

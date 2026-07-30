@@ -1,12 +1,12 @@
 package io.talkcan.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -51,15 +51,13 @@ fun PackageManagementScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
-            title = "PACKAGE MANAGEMENT",
-            subtitle = "Install and manage channel providers",
-            onLongPress = {},
+            title = "Install and manage providers",
+            subtitle = "Add channel providers from GitHub, then manage installed packages and profiles.",
         )
 
         InstallSection(state, actions)
@@ -82,11 +80,17 @@ private fun InstallSection(
     val isActive = state.isOperationActive
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("INSTALL PROVIDER", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TalkcanSectionHeader(
+                title = "Install provider",
+                supportingText = "Resolve a GitHub repository URL to begin.",
+            )
 
             when (state) {
                 is PackageManagementState.Idle,
@@ -138,10 +142,9 @@ private fun RecommendedPackages(
     onSelect: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            "RECOMMENDED",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
+        TalkcanSectionHeader(
+            title = "Recommended",
+            supportingText = "Official channel packages from Talkcan.",
         )
         recommendedPackages.forEach { pkg ->
             TextButton(
@@ -275,7 +278,10 @@ private fun TrustConfirmation(
     }
     var acknowledged by remember(trustKey) { mutableStateOf(false) }
 
-    Text("CONFIRM INSTALL", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    TalkcanSectionHeader(
+        title = "Confirm install",
+        supportingText = "Review the package identity and declared authority before proceeding.",
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Repository: ${confirmation.canonicalRepositoryUrl}")
@@ -289,16 +295,23 @@ private fun TrustConfirmation(
 
     when (tier) {
         GitHubPublisherTier.OFFICIAL -> {
+            TalkcanStatusBadge(
+                label = "Official — verified owner",
+                tone = TalkcanStatusTone.Ready,
+            )
             Text(
-                "Official: published by the verified project owner. " +
-                    "This indicates provenance, not review, audit, signing, or defect freedom.",
+                "This indicates provenance, not review, audit, signing, or defect freedom.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         GitHubPublisherTier.COMMUNITY -> {
+            TalkcanStatusBadge(
+                label = "Community — unreviewed",
+                tone = TalkcanStatusTone.Error,
+            )
             Text(
-                "Community — Unreviewed: this package is not published by the verified project owner. " +
+                "This package is not published by the verified project owner. " +
                     "You are installing trusted code from a third party. " +
                     "Review the source before proceeding.",
                 style = MaterialTheme.typography.bodySmall,
@@ -307,11 +320,10 @@ private fun TrustConfirmation(
             )
         }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            "DECLARED AUTHORITY",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TalkcanSectionHeader(
+            title = "Declared authority",
+            supportingText = "What this package can access.",
         )
         if (confirmation.capabilities.isEmpty()) {
             Text("No capabilities declared.", style = MaterialTheme.typography.bodySmall)
@@ -443,17 +455,23 @@ private fun PublishedProfileTypesSection(
     val types = profileState.publishedTypes
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("PROFILE TYPES", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            TalkcanSectionHeader(
+                title = "Profile types",
+                supportingText = "Configuration types published by installed packages.",
+            )
 
             if (types.isEmpty()) {
                 Text(
-                    "No installed package publishes profile types.",
+                    "No installed package publishes profile types. Install a provider package first.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -467,12 +485,12 @@ private fun PublishedProfileTypesSection(
                     Text(
                         "Source: ${type.canonicalOwner}/${type.canonicalRepository}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         "Repository ID: ${type.identity.repositoryId.value}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (type.hasSecretFields) {
                         Text(
@@ -514,23 +532,16 @@ private fun InstalledPackagesSection(
     val packages = summary.installedPackages
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "INSTALLED PACKAGES",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        TalkcanSectionHeader(
+            title = "Installed packages",
+            supportingText = "Providers currently installed on this device.",
+        )
 
         if (packages.isEmpty()) {
             Text(
-                "No packages installed.",
+                "No packages installed yet.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -550,11 +561,23 @@ private fun InstalledPackageCard(
     var showRemoveDialog by remember { mutableStateOf(false) }
     var showRollbackDialog by remember { mutableStateOf(false) }
 
+    val isUnavailable = pkg.status == io.talkcan.service.PackageManagementStatus.UNAVAILABLE
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (isUnavailable) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 "${pkg.canonicalOwner}/${pkg.canonicalRepository}",
                 style = MaterialTheme.typography.titleMedium,
@@ -563,40 +586,46 @@ private fun InstalledPackageCard(
             Text(
                 "Repository ID: ${pkg.repositoryId.value}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text("Version: ${pkg.packageVersion}")
             Text("Release: ${pkg.releaseTag}")
 
-            Text(
-                when (pkg.trustTier) {
-                    GitHubPublisherTier.OFFICIAL -> "Trust: Official"
-                    GitHubPublisherTier.COMMUNITY -> "Trust: Community — Unreviewed"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                color = if (pkg.trustTier == GitHubPublisherTier.OFFICIAL)
-                    MaterialTheme.colorScheme.secondary
-                else
-                    MaterialTheme.colorScheme.error,
-            )
-
-            Text(
-                when (pkg.status) {
-                    io.talkcan.service.PackageManagementStatus.AVAILABLE ->
-                        "Status: Available"
-                    io.talkcan.service.PackageManagementStatus.UNAVAILABLE ->
-                        "Status: Unavailable" +
-                            if (pkg.failureCategory != null) " ($pkg.failureCategory/$pkg.failureDetail)" else ""
-                },
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TalkcanStatusBadge(
+                    label = when (pkg.trustTier) {
+                        GitHubPublisherTier.OFFICIAL -> "Official"
+                        GitHubPublisherTier.COMMUNITY -> "Community — unreviewed"
+                    },
+                    tone = if (pkg.trustTier == GitHubPublisherTier.OFFICIAL) {
+                        TalkcanStatusTone.Ready
+                    } else {
+                        TalkcanStatusTone.Error
+                    },
+                )
+                TalkcanStatusBadge(
+                    label = when (pkg.status) {
+                        io.talkcan.service.PackageManagementStatus.AVAILABLE -> "Available"
+                        io.talkcan.service.PackageManagementStatus.UNAVAILABLE ->
+                            "Unavailable" +
+                                if (pkg.failureCategory != null) " ($pkg.failureCategory/$pkg.failureDetail)" else ""
+                    },
+                    tone = if (isUnavailable) {
+                        TalkcanStatusTone.Error
+                    } else {
+                        TalkcanStatusTone.Ready
+                    },
+                )
+            }
 
             if (pkg.hasRollback) {
                 Text(
                     "Rollback available: ${pkg.rollbackVersion} (${pkg.rollbackReleaseTag})",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

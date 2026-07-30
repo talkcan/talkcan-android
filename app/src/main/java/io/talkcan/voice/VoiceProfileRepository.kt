@@ -107,8 +107,8 @@ internal class VoiceProfileRepository(
     private val mutationLock = Any()
     private val builtInTokens = listOf("F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5")
 
-    // Model assets are hash-verified and immutable for the process lifetime; resolve once.
-    private val builtInSummaries: List<VoiceProfileSummary> = builtInTokens.map { builtInSummary(it) }
+    // Model assets can arrive after service construction during first-run setup.
+    private var builtInSummaries: List<VoiceProfileSummary> = resolveBuiltInSummaries()
 
     private val _catalogue = MutableStateFlow(reconciledCatalogue())
 
@@ -124,7 +124,10 @@ internal class VoiceProfileRepository(
      * Intended for startup and for recovery after an externally interrupted commit.
      */
     fun reload() {
-        synchronized(mutationLock) { _catalogue.value = reconciledCatalogue() }
+        synchronized(mutationLock) {
+            builtInSummaries = resolveBuiltInSummaries()
+            _catalogue.value = reconciledCatalogue()
+        }
     }
 
     /**
@@ -355,6 +358,9 @@ internal class VoiceProfileRepository(
             custom = index.entries.map { summaryForEntry(it) },
         )
     }
+
+    private fun resolveBuiltInSummaries(): List<VoiceProfileSummary> =
+        builtInTokens.map { builtInSummary(it) }
 
     private fun builtInSummary(token: String): VoiceProfileSummary {
         val id = VoiceProfileId("$BUILTIN_ID_PREFIX$token")

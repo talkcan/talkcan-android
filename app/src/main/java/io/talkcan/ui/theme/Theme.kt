@@ -1,62 +1,82 @@
 package io.talkcan.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 
-private val NightOpsScheme = darkColorScheme(
-    primary = TalkcanCyan,
-    onPrimary = NightVoid,
-    secondary = AlertAmber,
-    onSecondary = NightVoid,
-    background = NightVoid,
-    onBackground = NightTextPrimary,
-    surface = NightHull,
-    onSurface = NightTextPrimary,
-    surfaceVariant = Color(0xFF222A33),
-    onSurfaceVariant = NightTextSecondary,
-    outline = Color(0xFF3A4652),
-    error = AlertAmber,
-    onError = NightVoid,
+private val TalkcanDarkScheme = darkColorScheme(
+    primary = RadioBlue,
+    onPrimary = TalkcanWhite,
+    primaryContainer = DeepRadioBlue,
+    onPrimaryContainer = PaleRadioBlue,
+    secondary = StringYellow,
+    onSecondary = Ink,
+    secondaryContainer = DeepStringYellow,
+    onSecondaryContainer = PaleStringYellow,
+    tertiary = CanRed,
+    onTertiary = Ink,
+    tertiaryContainer = DeepCanRed,
+    onTertiaryContainer = PaleCanRed,
+    background = Ink,
+    onBackground = Paper,
+    surface = DarkSurface,
+    onSurface = Paper,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = Tin,
+    outline = DarkOutline,
+    outlineVariant = DarkOutline,
+    error = CanRed,
+    onError = Ink,
+    errorContainer = DeepError,
+    onErrorContainer = PaleError,
 )
 
-private val DaylightScheme = lightColorScheme(
-    primary = CommandGold,
-    onPrimary = DayTextPrimary,
-    secondary = SciencesBlue,
-    onSecondary = Color.White,
-    background = HullWhite,
-    onBackground = DayTextPrimary,
-    surface = DeckWhite,
-    onSurface = DayTextPrimary,
-    surfaceVariant = Color(0xFFE9E9E2),
-    onSurfaceVariant = DayTextSecondary,
-    outline = Color(0xFFC8C8C0),
-    error = SciencesBlue,
-    onError = Color.White,
+private val TalkcanLightScheme = lightColorScheme(
+    primary = RadioBlue,
+    onPrimary = TalkcanWhite,
+    primaryContainer = PaleRadioBlue,
+    onPrimaryContainer = DeepRadioBlue,
+    secondary = StringYellow,
+    onSecondary = Ink,
+    secondaryContainer = PaleStringYellow,
+    onSecondaryContainer = Ink,
+    tertiary = CanRed,
+    onTertiary = Ink,
+    tertiaryContainer = PaleCanRed,
+    onTertiaryContainer = Ink,
+    background = Paper,
+    onBackground = Ink,
+    surface = TalkcanWhite,
+    onSurface = Ink,
+    surfaceVariant = PaperVariant,
+    onSurfaceVariant = MutedText,
+    outline = Tin,
+    outlineVariant = SoftOutline,
+    error = ErrorRed,
+    onError = TalkcanWhite,
+    errorContainer = PaleError,
+    onErrorContainer = DeepError,
 )
 
 private val TalkcanShapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(6.dp),
-    medium = RoundedCornerShape(8.dp),
-    large = RoundedCornerShape(8.dp),
-    extraLarge = RoundedCornerShape(12.dp),
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(20.dp),
 )
 
 @Composable
 fun TalkcanTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) NightOpsScheme else DaylightScheme,
+        colorScheme = if (darkTheme) TalkcanDarkScheme else TalkcanLightScheme,
         typography = TalkcanTypography,
         shapes = TalkcanShapes,
         content = content,

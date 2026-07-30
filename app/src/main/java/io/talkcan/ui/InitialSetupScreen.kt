@@ -1,11 +1,10 @@
 package io.talkcan.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -57,8 +56,8 @@ fun InitialSetupScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
-            title = "TALKCAN SETUP",
-            subtitle = "Grant permissions, allow storage access, download speech models, and install an offline navigation voice to continue.",
+            title = "Set up Talkcan",
+            subtitle = "Complete four checks so Talkcan can hear, route, and speak.",
         )
 
         PermissionsStep(
@@ -92,23 +91,50 @@ fun InitialSetupScreen(
 @Composable
 private fun PermissionsStep(done: Boolean, onRequest: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (done) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("STEP 1 — PERMISSIONS", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(
+                title = "Permissions",
+                supportingText = "Bluetooth, microphone, and notifications.",
+            )
+            TalkcanStatusBadge(
+                label = if (done) "Completed" else "Needs setup",
+                tone = if (done) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
+            )
             Text(
-                if (done) "All runtime permissions granted." else "Bluetooth, microphone, and notification permissions are required.",
+                if (done) {
+                    "All runtime permissions granted."
+                } else {
+                    "Bluetooth, microphone, and notification permissions are required."
+                },
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(12.dp))
             if (!done) {
-                Button(onClick = onRequest, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onRequest,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text("Grant permissions")
                 }
-            } else {
-                Text("✓ Granted", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -121,20 +147,40 @@ private fun StorageAccessStep(
     onRequest: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (done) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("STEP 2 — STORAGE ACCESS", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(
+                title = "Storage access",
+                supportingText = "Filesystem paths for journal writes.",
+            )
+            TalkcanStatusBadge(
+                label = if (done) "Completed" else "Needs setup",
+                tone = if (done) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
+            )
             Text(
                 "Journal writes to a user-selected filesystem directory. Android all-files access is required for these real paths.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(12.dp))
-            if (done) {
-                Text("✓ Granted", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            } else {
+            if (!done) {
                 Button(
                     onClick = onRequest,
                     enabled = permissionsDone,
@@ -155,31 +201,53 @@ private fun ModelDownloadStep(
     onStart: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (done) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("STEP 3 — SPEECH MODELS", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(
+                title = "Speech models",
+                supportingText = "Parakeet and Supertonic downloads.",
+            )
+            TalkcanStatusBadge(
+                label = if (done) "Completed" else "Needs setup",
+                tone = if (done) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
+            )
             Text(
                 "Download the Parakeet (STT) and Supertonic (TTS) models (~950 MB). A network connection is required.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(12.dp))
-
-            if (done) {
-                Text("✓ Models verified", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            } else {
-                Text("Model download or repair required.", style = MaterialTheme.typography.bodyMedium)
-            }
-
-            if (error != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-
             if (!done) {
-                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Model download or repair required.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            if (error != null) {
+                Text(
+                    error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (!done) {
                 Button(
                     onClick = onStart,
                     enabled = prerequisitesDone,
@@ -201,46 +269,73 @@ private fun VoiceSetupStep(
     onResolve: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (done) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("STEP 4 — OFFLINE NAVIGATION VOICE", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(
+                title = "Offline navigation voice",
+                supportingText = "Spoken feedback without a network.",
+            )
+            TalkcanStatusBadge(
+                label = if (done) "Completed" else "Needs setup",
+                tone = if (done) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
+            )
             Text(
                 "An installed offline English text-to-speech voice is required for spoken navigation feedback. No network connection is used during announcements.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(12.dp))
 
             if (!prerequisitesDone) {
-                Text("Waiting for earlier setup steps to complete…", style = MaterialTheme.typography.bodyMedium)
-            } else if (done) {
-                Text("✓ Offline voice verified", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            } else if (issue != null) {
                 Text(
-                    "Error: Offline voice verification failed",
+                    "Waiting for earlier setup steps to complete…",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else if (!done && issue != null) {
+                Text(
+                    "Offline voice verification failed",
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold,
                 )
-            } else {
-                Text("Offline English voice not available.", style = MaterialTheme.typography.bodyMedium)
+            } else if (!done) {
+                Text(
+                    "Offline English voice not available.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
 
             if (issue != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(issue.diagnostic, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    issue.diagnostic,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             if (issue != null && requiresManualNavigation) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "In Android Settings, open Text-to-speech output and install an offline English voice.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+                Text(
+                    "In Android Settings, open Text-to-speech output and install an offline English voice.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             if (!done) {
-                Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = onResolve,
                     enabled = prerequisitesDone,

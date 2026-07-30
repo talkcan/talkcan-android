@@ -4,10 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,13 +18,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.talkcan.model.ButtonStates
 import io.talkcan.model.ClickButtonState
 import io.talkcan.model.EchoStatus
+import io.talkcan.model.HardwareMode
 import io.talkcan.model.MonitorState
+import io.talkcan.model.ScoState
 import io.talkcan.model.TwoStateButton
 import io.talkcan.model.displayText
 
@@ -36,12 +35,6 @@ fun MonitorScreen(
     actions: PttUiActions,
     modifier: Modifier = Modifier,
 ) {
-    val accent = when {
-        state.buttons.ptt == TwoStateButton.Pressed -> MaterialTheme.colorScheme.primary
-        state.echoStatus == EchoStatus.Playback -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.outline
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -50,11 +43,11 @@ fun MonitorScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
-            title = "FIELD MONITOR",
-            subtitle = "${state.hardwareMode.name.uppercase()} mode · ${state.echoStatus.displayText()}",
+            title = "Hardware monitor",
+            subtitle = "${state.hardwareMode.name.lowercase()} mode · echo ${state.echoStatus.displayText().lowercase()}",
         )
 
-        PttStatusCard(state, accent)
+        PttStatusCard(state)
         ButtonTable(state.buttons)
         AudioStatus(state)
 
@@ -65,23 +58,50 @@ fun MonitorScreen(
 }
 
 @Composable
-private fun PttStatusCard(state: MonitorState, accent: Color) {
+private fun PttStatusCard(state: MonitorState) {
+    val pttTone = when (state.buttons.ptt) {
+        TwoStateButton.Pressed -> TalkcanStatusTone.Active
+        TwoStateButton.Released -> TalkcanStatusTone.Neutral
+    }
+    val modeTone = when (state.hardwareMode) {
+        HardwareMode.Active -> TalkcanStatusTone.Active
+        HardwareMode.Control -> TalkcanStatusTone.Neutral
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(2.dp, accent),
+        border = BorderStroke(
+            1.dp,
+            if (state.buttons.ptt == TwoStateButton.Pressed) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("PTT", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                text = state.buttons.ptt.name.uppercase(),
-                style = MaterialTheme.typography.displaySmall,
-                color = accent,
-            )
-            Text("Hardware mode: ${state.hardwareMode.name}", style = MaterialTheme.typography.bodyLarge)
+            TalkcanSectionHeader(title = "PTT status")
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TalkcanStatusBadge(
+                    label = state.buttons.ptt.name.lowercase(),
+                    tone = pttTone,
+                )
+                TalkcanStatusBadge(
+                    label = "${state.hardwareMode.name.lowercase()} mode",
+                    tone = modeTone,
+                )
+                TalkcanStatusBadge(
+                    label = "echo ${state.echoStatus.displayText().lowercase()}",
+                    tone = echoTone(state.echoStatus),
+                )
+            }
+            MonitorRow("Hardware mode", state.hardwareMode.name.lowercase())
         }
     }
 }
@@ -90,31 +110,44 @@ private fun PttStatusCard(state: MonitorState, accent: Color) {
 private fun ButtonTable(buttons: ButtonStates) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("BUTTON STATE", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(12.dp))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(title = "Button state")
             MonitorRow("PTT", buttons.ptt.name.lowercase())
             MonitorRow("SOS", buttons.sos.name.toDisplayToken())
             MonitorRow("Group", buttons.group.name.lowercase())
-            MonitorRow("Volume Up", buttons.volumeUp.displayText())
-            MonitorRow("Volume Down", buttons.volumeDown.displayText())
+            MonitorRow("Volume up", buttons.volumeUp.displayText())
+            MonitorRow("Volume down", buttons.volumeDown.displayText())
         }
     }
 }
 
 @Composable
 private fun AudioStatus(state: MonitorState) {
+    val scoTone = when (state.scoState) {
+        ScoState.Inactive -> TalkcanStatusTone.Neutral
+        ScoState.Starting -> TalkcanStatusTone.Attention
+        ScoState.Active -> TalkcanStatusTone.Ready
+        ScoState.Closing -> TalkcanStatusTone.Attention
+        is ScoState.Failed -> TalkcanStatusTone.Error
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("AUDIO ROUTE", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(12.dp))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TalkcanSectionHeader(title = "Audio route")
+            TalkcanStatusBadge(label = state.scoState.displayText(), tone = scoTone)
             MonitorRow("SCO", state.scoState.displayText())
         }
     }
@@ -133,6 +166,18 @@ private fun MonitorRow(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+}
+
+private fun echoTone(status: EchoStatus): TalkcanStatusTone = when (status) {
+    EchoStatus.Idle -> TalkcanStatusTone.Neutral
+    EchoStatus.WaitingForAudio -> TalkcanStatusTone.Attention
+    EchoStatus.Beeping -> TalkcanStatusTone.Attention
+    EchoStatus.Recording -> TalkcanStatusTone.Recording
+    EchoStatus.MaxDurationReached -> TalkcanStatusTone.Attention
+    EchoStatus.Playback -> TalkcanStatusTone.Attention
+    EchoStatus.Warm -> TalkcanStatusTone.Ready
+    EchoStatus.Cancelled -> TalkcanStatusTone.Neutral
+    is EchoStatus.Error -> TalkcanStatusTone.Error
 }
 
 private fun String.toDisplayToken(): String = when (this) {
