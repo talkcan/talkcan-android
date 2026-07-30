@@ -762,6 +762,7 @@ private fun PhonePttDock(
     modifier: Modifier = Modifier,
 ) {
     val activeChannelId = activeChannel?.id
+    val currentPhonePttGesture by rememberUpdatedState(phonePttGesture)
     val isPlaybackActive = pttAudioState.isPlaybackActive
     val phase = pttAudioState.phase
     val source = pttAudioState.source
@@ -850,7 +851,7 @@ private fun PhonePttDock(
         ?.let { channelId ->
             Modifier.phonePttInput(
                 channelId = channelId,
-                stateProvider = { phonePttGesture },
+                stateProvider = { currentPhonePttGesture },
                 onPhonePttTransition = { currentPhonePttTransition(it) },
             )
         }

@@ -220,7 +220,7 @@ class Task7_3ComposeInteractionInstrumentedTest {
         }
 
         // Tap on channel 2 primary selection area
-        composeRule.onNodeWithTag("channel-primary-ch-2").performClick()
+        composeRule.onNodeWithTag("channel-primary-ch-2").performScrollTo().performClick()
 
         // Assert: setActiveChannel called on channel 2
         assertTrue(actions.activeChannels.contains("ch-2"))
@@ -230,13 +230,51 @@ class Task7_3ComposeInteractionInstrumentedTest {
 
         // Verify independent components: Settings and Pending badge
         // 1. Settings button
-        composeRule.onNodeWithTag("channel-settings-ch-2").performClick()
+        composeRule.onNodeWithTag("channel-settings-ch-2").performScrollTo().performClick()
         assertTrue(actions.configuredChannels.contains("ch-2"))
 
         // 2. Pending badge
-        composeRule.onNodeWithTag("channel-pending-ch-2").performClick()
+        composeRule.onNodeWithTag("channel-pending-ch-2").performScrollTo().performClick()
         // verify active channels contains ch-2 again (was clicked once as primary, now again via badge)
         assertEquals(2, actions.activeChannels.filter { it == "ch-2" }.size)
+    }
+
+    @Test
+    fun phonePttPointerUpReleasesThePressedChannel() {
+        val actions = FakePttUiActions()
+        val channel = createMockChannel(id = "ch-1", name = "Channel One")
+        val appState = AppState(
+            channels = listOf(channel),
+            activeChannelId = channel.id,
+            inputModeAvailability = InputModeAvailability(
+                work = true,
+                onTheRoad = true,
+                onAPinch = true,
+            ),
+            inputMode = InputMode.OnAPinch,
+        )
+
+        composeRule.setContent {
+            TalkcanTheme {
+                MainDashboardScreen(
+                    appState = appState,
+                    level = 0.0f,
+                    isCapturing = false,
+                    providerDescriptors = listOf(createMockDescriptor("built-in:journal")),
+                    actions = actions,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("phone-ptt-dock").performTouchInput {
+            down(center)
+            advanceEventTime(100)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        assertEquals(listOf(channel.id), actions.pressedChannels)
+        assertEquals(listOf(channel.id), actions.releasedChannels)
     }
 
     @Test
@@ -327,49 +365,63 @@ class Task7_3ComposeInteractionInstrumentedTest {
             "Diagnostic logs"
         )
         for (row in expectedRows) {
-            composeRule.onNodeWithTag("settings-row-$row").assertIsDisplayed()
+            composeRule.onNodeWithTag("settings-row-$row")
+                .performScrollTo()
+                .assertIsDisplayed()
         }
 
         // 2. Phone row should be disabled (not enabled/clickable)
         composeRule.onNodeWithTag("settings-row-Phone").assertIsNotEnabled()
 
         // 3. Click and verify enabled callbacks
-        composeRule.onNodeWithTag("settings-row-Radio").performClick()
+        composeRule.onNodeWithTag("settings-row-Radio").performScrollTo().performClick()
         assertTrue(actions.onRsmClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Car").performClick()
+        composeRule.onNodeWithTag("settings-row-Car").performScrollTo().performClick()
         assertTrue(actions.onCarClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Channel management").performClick()
+        composeRule.onNodeWithTag("settings-row-Channel management")
+            .performScrollTo()
+            .performClick()
         assertTrue(actions.onChannelManagementClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Installed providers").performClick()
+        composeRule.onNodeWithTag("settings-row-Installed providers")
+            .performScrollTo()
+            .performClick()
         assertTrue(actions.onInstalledProvidersClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Provider profiles").performClick()
+        composeRule.onNodeWithTag("settings-row-Provider profiles")
+            .performScrollTo()
+            .performClick()
         assertTrue(actions.onProviderProfilesClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Voice profiles").performClick()
+        composeRule.onNodeWithTag("settings-row-Voice profiles")
+            .performScrollTo()
+            .performClick()
         assertTrue(actions.onVoiceProfilesClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Permissions").performClick()
+        composeRule.onNodeWithTag("settings-row-Permissions").performScrollTo().performClick()
         assertTrue(actions.onSystemReadinessClickCalled)
 
         // Reset readiness check callback flag to test subsequent readiness rows
         actions.onSystemReadinessClickCalled = false
 
-        composeRule.onNodeWithTag("settings-row-Models").performClick()
+        composeRule.onNodeWithTag("settings-row-Models").performScrollTo().performClick()
         assertTrue(actions.onSystemReadinessClickCalled)
         actions.onSystemReadinessClickCalled = false
 
-        composeRule.onNodeWithTag("settings-row-Offline voice").performClick()
+        composeRule.onNodeWithTag("settings-row-Offline voice")
+            .performScrollTo()
+            .performClick()
         assertTrue(actions.onSystemReadinessClickCalled)
         actions.onSystemReadinessClickCalled = false
 
-        composeRule.onNodeWithTag("settings-row-Storage").performClick()
+        composeRule.onNodeWithTag("settings-row-Storage").performScrollTo().performClick()
         assertTrue(actions.onSystemReadinessClickCalled)
 
-        composeRule.onNodeWithTag("settings-row-Diagnostic logs").performClick()
+        composeRule.onNodeWithTag("settings-row-Diagnostic logs")
+            .performScrollTo()
+            .performClick()
         assertTrue(actions.onLogsClickCalled)
     }
 

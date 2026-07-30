@@ -19,6 +19,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
@@ -209,6 +211,11 @@ private fun ColumnScope.SettingsRow(
                 Modifier
             }
         )
+        .semantics {
+            if (!enabled) {
+                disabled()
+            }
+        }
         .testTag("settings-row-${label}")
         .padding(vertical = 12.dp, horizontal = 4.dp)
 
