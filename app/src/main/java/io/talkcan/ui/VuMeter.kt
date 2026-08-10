@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,12 +21,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.talkcan.ui.theme.CanRed
-import io.talkcan.ui.theme.SignalGreen
+import io.talkcan.ui.theme.SignalAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.round
@@ -82,7 +79,11 @@ fun VuMeter(
 
     val effectiveZone = if (isCapturing) engineState.zone else VuZone.LOW
     val zoneLabelColor by animateColorAsState(
-        targetValue = if (isCapturing) zoneColor(effectiveZone) else trackColor(),
+        targetValue = if (isCapturing) {
+            zoneColor(effectiveZone)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
         animationSpec = tween(LABEL_TRANSITION_MS),
         label = "vu-zone-label",
     )
@@ -93,7 +94,7 @@ fun VuMeter(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             for (i in 0 until VuMeterEngine.SEGMENT_COUNT) {
@@ -152,7 +153,6 @@ private fun Segment(
     Box(
         modifier = modifier
             .height(SEGMENT_HEIGHT)
-            .clip(RoundedCornerShape(1.dp))
             .background(fill),
     )
 }
@@ -171,8 +171,8 @@ private fun zoneForSegment(segmentLower: Float, segmentUpper: Float): VuZone {
 @Composable
 private fun zoneColor(zone: VuZone): Color = when (zone) {
     VuZone.LOW -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = LOW_ZONE_OPACITY)
-    VuZone.GOOD -> SignalGreen
-    VuZone.CLIP -> CanRed
+    VuZone.GOOD -> SignalAmber
+    VuZone.CLIP -> MaterialTheme.colorScheme.error
 }
 
 @Composable

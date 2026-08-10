@@ -2,11 +2,16 @@ package io.talkcan.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,20 +20,82 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.talkcan.ui.theme.CanRed
-import io.talkcan.ui.theme.Ink
-import io.talkcan.ui.theme.RadioBlue
-import io.talkcan.ui.theme.SignalGreen
-import io.talkcan.ui.theme.StringYellow
+import androidx.compose.ui.unit.sp
+import io.talkcan.ui.theme.Graphite
+import io.talkcan.ui.theme.MutedSteel
+import io.talkcan.ui.theme.NearBlack
+import io.talkcan.ui.theme.SignalAmber
+import io.talkcan.ui.theme.StatusCyan
+import io.talkcan.ui.theme.TalkcanError
+import io.talkcan.ui.theme.WarmAluminum
 
+@Composable
+internal fun TalkcanInstrumentBackdrop(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .background(Graphite)
+            .drawBehind {
+                val gridSize = 32.dp.toPx()
+                val lineColor = Color.White.copy(alpha = 0.04f)
+                var x = 0f
+                while (x < size.width) {
+                    drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                    x += gridSize
+                }
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                    y += gridSize
+                }
+            }
+    ) {
+        content()
+    }
+}
+
+@Composable
+internal fun TalkcanInstrumentPanel(
+    modifier: Modifier = Modifier,
+    borderColor: Color = MaterialTheme.colorScheme.outlineVariant,
+    containerColor: Color = NearBlack,
+    contentPadding: Dp = 16.dp,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(2.dp))
+            .background(containerColor)
+            .border(1.dp, borderColor, RoundedCornerShape(2.dp))
+            .drawBehind {
+                val tickLength = 6.dp.toPx()
+                val tickColor = borderColor
+                drawLine(tickColor, Offset(0f, 0f), Offset(tickLength, 0f), 1f)
+                drawLine(tickColor, Offset(0f, 0f), Offset(0f, tickLength), 1f)
+                drawLine(tickColor, Offset(size.width, 0f), Offset(size.width - tickLength, 0f), 1f)
+                drawLine(tickColor, Offset(size.width, 0f), Offset(size.width, tickLength), 1f)
+                drawLine(tickColor, Offset(0f, size.height), Offset(tickLength, size.height), 1f)
+                drawLine(tickColor, Offset(0f, size.height), Offset(0f, size.height - tickLength), 1f)
+                drawLine(tickColor, Offset(size.width, size.height), Offset(size.width - tickLength, size.height), 1f)
+                drawLine(tickColor, Offset(size.width, size.height), Offset(size.width, size.height - tickLength), 1f)
+            }
+            .padding(contentPadding)
+    ) {
+        androidx.compose.foundation.layout.Column(content = content)
+    }
+}
 @Composable
 internal fun TalkcanBrandLabel(
     modifier: Modifier = Modifier,
@@ -41,10 +108,11 @@ internal fun TalkcanBrandLabel(
     ) {
         TalkcanMark(modifier = Modifier.size(42.dp))
         Text(
-            text = "talkcan",
-            style = MaterialTheme.typography.titleLarge,
+            text = "TALKCAN",
+            style = MaterialTheme.typography.displaySmall,
             color = color,
             fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 2.sp,
         )
     }
 }
@@ -53,64 +121,53 @@ internal fun TalkcanBrandLabel(
 internal fun TalkcanMark(
     modifier: Modifier = Modifier,
 ) {
-    val outline = MaterialTheme.colorScheme.onBackground
+    val plateColor = MaterialTheme.colorScheme.onSurfaceVariant
     Canvas(modifier = modifier) {
-        val stroke = size.minDimension * 0.055f
-        val canTopLeft = Offset(size.width * 0.05f, size.height * 0.18f)
-        val canSize = Size(size.width * 0.34f, size.height * 0.54f)
-        val radius = size.minDimension * 0.08f
+        val stroke = size.minDimension * 0.04f
+        val rectTopLeft = Offset(size.width * 0.1f, size.height * 0.1f)
+        val rectSize = Size(size.width * 0.8f, size.height * 0.8f)
 
-        drawRoundRect(
-            color = CanRed,
-            topLeft = canTopLeft,
-            size = canSize,
-            cornerRadius = CornerRadius(radius, radius),
-        )
-        drawRoundRect(
-            color = outline,
-            topLeft = canTopLeft,
-            size = canSize,
-            cornerRadius = CornerRadius(radius, radius),
+        drawRect(
+            color = plateColor,
+            topLeft = rectTopLeft,
+            size = rectSize,
             style = Stroke(width = stroke),
         )
+
         drawLine(
-            color = outline,
-            start = Offset(size.width * 0.09f, size.height * 0.27f),
-            end = Offset(size.width * 0.35f, size.height * 0.27f),
+            color = SignalAmber,
+            start = Offset(0f, size.height * 0.5f),
+            end = Offset(size.width * 0.35f, size.height * 0.5f),
             strokeWidth = stroke,
-            cap = StrokeCap.Round,
+            cap = StrokeCap.Square,
         )
+
         drawLine(
-            color = StringYellow,
-            start = Offset(size.width * 0.34f, size.height * 0.66f),
-            end = Offset(size.width * 0.59f, size.height * 0.62f),
+            color = SignalAmber,
+            start = Offset(size.width * 0.35f, size.height * 0.3f),
+            end = Offset(size.width * 0.35f, size.height * 0.7f),
             strokeWidth = stroke,
-            cap = StrokeCap.Round,
+            cap = StrokeCap.Square,
         )
-        val branch = Offset(size.width * 0.59f, size.height * 0.62f)
+
         val endpoints = listOf(
-            Offset(size.width * 0.88f, size.height * 0.28f) to RadioBlue,
-            Offset(size.width * 0.92f, size.height * 0.60f) to SignalGreen,
-            Offset(size.width * 0.82f, size.height * 0.84f) to CanRed,
+            Offset(size.width * 0.7f, size.height * 0.3f),
+            Offset(size.width * 0.7f, size.height * 0.5f),
+            Offset(size.width * 0.7f, size.height * 0.7f),
         )
-        endpoints.forEach { (endpoint, endpointColor) ->
+
+        endpoints.forEach { endpoint ->
             drawLine(
-                color = StringYellow,
-                start = branch,
+                color = SignalAmber,
+                start = Offset(size.width * 0.35f, endpoint.y),
                 end = endpoint,
                 strokeWidth = stroke,
-                cap = StrokeCap.Round,
+                cap = StrokeCap.Square,
             )
-            drawCircle(
-                color = endpointColor,
-                radius = size.minDimension * 0.075f,
-                center = endpoint,
-            )
-            drawCircle(
-                color = Ink,
-                radius = size.minDimension * 0.075f,
-                center = endpoint,
-                style = Stroke(width = stroke * 0.6f),
+            drawRect(
+                color = StatusCyan,
+                topLeft = Offset(endpoint.x, endpoint.y - stroke * 1.5f),
+                size = Size(stroke * 3f, stroke * 3f),
             )
         }
     }
@@ -131,50 +188,35 @@ internal fun TalkcanStatusBadge(
     tone: TalkcanStatusTone,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = when (tone) {
-        TalkcanStatusTone.Neutral -> MaterialTheme.colorScheme.surfaceVariant
-        TalkcanStatusTone.Active -> MaterialTheme.colorScheme.primaryContainer
-        TalkcanStatusTone.Ready -> MaterialTheme.colorScheme.tertiaryContainer
-        TalkcanStatusTone.Recording -> StringYellow
-        TalkcanStatusTone.Attention -> MaterialTheme.colorScheme.secondaryContainer
-        TalkcanStatusTone.Error -> MaterialTheme.colorScheme.errorContainer
-    }
-    val contentColor = when (tone) {
-        TalkcanStatusTone.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
-        TalkcanStatusTone.Active -> MaterialTheme.colorScheme.onPrimaryContainer
-        TalkcanStatusTone.Ready -> MaterialTheme.colorScheme.onTertiaryContainer
-        TalkcanStatusTone.Recording -> Ink
-        TalkcanStatusTone.Attention -> MaterialTheme.colorScheme.onSecondaryContainer
-        TalkcanStatusTone.Error -> MaterialTheme.colorScheme.onErrorContainer
-    }
-    val signalColor = when (tone) {
-        TalkcanStatusTone.Neutral -> MaterialTheme.colorScheme.outline
-        TalkcanStatusTone.Active -> RadioBlue
-        TalkcanStatusTone.Ready -> SignalGreen
-        TalkcanStatusTone.Recording -> CanRed
-        TalkcanStatusTone.Attention -> StringYellow
-        TalkcanStatusTone.Error -> MaterialTheme.colorScheme.error
+    val toneColor = when (tone) {
+        TalkcanStatusTone.Neutral -> WarmAluminum.copy(alpha = 0.72f)
+        TalkcanStatusTone.Active -> SignalAmber
+        TalkcanStatusTone.Ready -> StatusCyan
+        TalkcanStatusTone.Recording -> SignalAmber
+        TalkcanStatusTone.Attention -> WarmAluminum
+        TalkcanStatusTone.Error -> TalkcanError
     }
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(containerColor)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+            .clip(RoundedCornerShape(2.dp))
+            .background(NearBlack)
+            .border(1.dp, toneColor, RoundedCornerShape(2.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(signalColor),
+                .size(6.dp)
+                .background(toneColor),
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = contentColor,
-            fontWeight = FontWeight.SemiBold,
+            color = toneColor,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -192,14 +234,21 @@ internal fun TalkcanSectionHeader(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            modifier = Modifier
+                .width(2.dp)
+                .height(24.dp)
+                .background(SignalAmber)
+        )
         androidx.compose.foundation.layout.Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
             )
             supportingText?.let {
                 Text(
@@ -210,8 +259,16 @@ internal fun TalkcanSectionHeader(
             }
         }
         if (actionLabel != null && onAction != null) {
-            TextButton(onClick = onAction) {
-                Text(actionLabel)
+            TextButton(
+                onClick = onAction,
+                shape = RoundedCornerShape(2.dp)
+            ) {
+                Text(
+                    text = actionLabel.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }

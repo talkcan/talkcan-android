@@ -4,8 +4,10 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:fontFamily">@font/inter_variable</item>
-        <item name="android:colorAccent">#2256A8</item>
-        <item name="android:navigationBarColor">#F7F3E8</item>
-        <item name="android:statusBarColor">#F7F3E8</item>
+        <item name="android:colorAccent">#C7B9A2</item>
+        <item name="android:navigationBarColor">#080B0C</item>
+        <item name="android:statusBarColor">#080B0C</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
