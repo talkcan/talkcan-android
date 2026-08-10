@@ -1,6 +1,5 @@
 package io.talkcan.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +16,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.talkcan.model.OfflineNavigationVoiceIssue
 import io.talkcan.model.ModelAcquisitionProgress
+import io.talkcan.ui.theme.SignalAmber
+import io.talkcan.ui.theme.StatusCyan
+import io.talkcan.ui.theme.TalkcanError
+import io.talkcan.ui.theme.WarmAluminum
 
 @Composable
 fun SystemReadinessScreen(
@@ -45,35 +46,25 @@ fun SystemReadinessScreen(
     val voiceDone = voiceReady
     val voicePrerequisitesDone = setupPrerequisitesDone && modelsDone
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    TalkcanInstrumentBackdrop(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
         TerminalHeader(
             title = "System readiness",
             subtitle = "Verify and configure core device check categories.",
         )
 
         // Step 1: Permissions
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            border = BorderStroke(
-                1.dp,
-                if (permissionsDone) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            ),
+        TalkcanInstrumentPanel(
+            borderColor = if (permissionsDone) StatusCyan else WarmAluminum,
+            contentPadding = 18.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
-                modifier = Modifier.padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TalkcanSectionHeader(
@@ -108,22 +99,12 @@ fun SystemReadinessScreen(
         }
 
         // Step 2: Storage Access
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            border = BorderStroke(
-                1.dp,
-                if (storageDone) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            ),
+        TalkcanInstrumentPanel(
+            borderColor = if (storageDone) StatusCyan else WarmAluminum,
+            contentPadding = 18.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
-                modifier = Modifier.padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TalkcanSectionHeader(
@@ -155,22 +136,17 @@ fun SystemReadinessScreen(
         }
 
         // Step 3: Speech Models
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            border = BorderStroke(
-                1.dp,
-                if (modelsDone) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            ),
+        val modelsActive = modelProgress.totalBytes > 0 && !modelsDone
+        TalkcanInstrumentPanel(
+            borderColor = when {
+                modelsDone -> StatusCyan
+                modelsActive -> SignalAmber
+                else -> WarmAluminum
+            },
+            contentPadding = 18.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
-                modifier = Modifier.padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TalkcanSectionHeader(
@@ -198,7 +174,7 @@ fun SystemReadinessScreen(
                 if (error != null) {
                     Text(
                         error,
-                        color = MaterialTheme.colorScheme.error,
+                        color = TalkcanError,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -215,22 +191,16 @@ fun SystemReadinessScreen(
         }
 
         // Step 4: Offline Navigation Voice
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            border = BorderStroke(
-                1.dp,
-                if (voiceDone) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            ),
+        TalkcanInstrumentPanel(
+            borderColor = when {
+                voiceDone -> StatusCyan
+                !voiceDone && voicePrerequisitesDone -> WarmAluminum
+                else -> MaterialTheme.colorScheme.outlineVariant
+            },
+            contentPadding = 18.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
-                modifier = Modifier.padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TalkcanSectionHeader(
@@ -258,7 +228,7 @@ fun SystemReadinessScreen(
                 } else if (!voiceDone && offlineNavigationVoiceIssue != null) {
                     Text(
                         "Offline voice verification failed",
-                        color = MaterialTheme.colorScheme.error,
+                        color = TalkcanError,
                         fontWeight = FontWeight.SemiBold,
                     )
                 } else if (!voiceDone) {
@@ -271,7 +241,7 @@ fun SystemReadinessScreen(
                 if (offlineNavigationVoiceIssue != null) {
                     Text(
                         offlineNavigationVoiceIssue.diagnostic,
-                        color = MaterialTheme.colorScheme.error,
+                        color = TalkcanError,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -293,5 +263,6 @@ fun SystemReadinessScreen(
                 }
             }
         }
+    }
     }
 }

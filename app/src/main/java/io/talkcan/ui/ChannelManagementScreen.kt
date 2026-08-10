@@ -1,6 +1,5 @@
 package io.talkcan.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,8 +13,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,29 +48,22 @@ fun ChannelManagementScreen(
     var renameTargetId by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    TalkcanInstrumentBackdrop(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         appState.channels.forEachIndexed { index, channel ->
             val descriptor = providerDescriptors.firstOrNull {
                 it.implementationId == channel.implementationId
             }
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                ),
+            TalkcanInstrumentPanel(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row(
@@ -105,10 +95,9 @@ fun ChannelManagementScreen(
                                 )
                                 val label = descriptor?.presentation?.label
                                     ?: channel.implementationId.value
-                                Text(
-                                    label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                TalkcanStatusBadge(
+                                    label = label,
+                                    tone = TalkcanStatusTone.Ready,
                                 )
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -162,18 +151,10 @@ fun ChannelManagementScreen(
             }
         }
 
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant,
-            ),
+        TalkcanInstrumentPanel(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TalkcanSectionHeader(
@@ -219,4 +200,5 @@ fun ChannelManagementScreen(
             }
         }
     }
+}
 }

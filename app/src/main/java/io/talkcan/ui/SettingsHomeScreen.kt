@@ -1,6 +1,7 @@
 package io.talkcan.ui
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,10 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +28,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
-
 @Composable
 fun SettingsHomeScreen(
     onRsmClick: () -> Unit,
@@ -45,14 +44,19 @@ fun SettingsHomeScreen(
     storageReady: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TalkcanBrandLabel(compact = true)
+    TalkcanInstrumentBackdrop(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            TerminalHeader(
+                title = "Settings",
+                subtitle = "Application configuration",
+                compact = true
+            )
 
         // Group 1: Devices and audio
         SettingsGroup(
@@ -125,24 +129,44 @@ fun SettingsHomeScreen(
             SettingsRow(
                 label = "Permissions",
                 statusText = if (permissionsReady) "All required application permissions granted" else "Permissions missing or not fully granted",
+                statusTone = if (permissionsReady) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
                 enabled = true,
                 onClick = onSystemReadinessClick
             )
             SettingsRow(
                 label = "Models",
                 statusText = if (modelsReady) "Local speech translation and recognition models up to date" else "Speech models download or repair required",
+                statusTone = if (modelsReady) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
                 enabled = true,
                 onClick = onSystemReadinessClick
             )
             SettingsRow(
                 label = "Offline voice",
                 statusText = if (voiceReady) "System text-to-speech fallback ready" else "Offline voice setup or verification required",
+                statusTone = if (voiceReady) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
                 enabled = true,
                 onClick = onSystemReadinessClick
             )
             SettingsRow(
                 label = "Storage",
                 statusText = if (storageReady) "Local directory and file mount points ready" else "Durable storage access required",
+                statusTone = if (storageReady) {
+                    TalkcanStatusTone.Ready
+                } else {
+                    TalkcanStatusTone.Attention
+                },
                 enabled = true,
                 onClick = onSystemReadinessClick
             )
@@ -162,6 +186,7 @@ fun SettingsHomeScreen(
         }
     }
 }
+}
 
 @Composable
 private fun SettingsGroup(
@@ -170,11 +195,7 @@ private fun SettingsGroup(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    TalkcanInstrumentPanel(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
@@ -200,6 +221,7 @@ private fun SettingsGroup(
 private fun ColumnScope.SettingsRow(
     label: String,
     statusText: String?,
+    statusTone: TalkcanStatusTone? = null,
     enabled: Boolean,
     onClick: (() -> Unit)?,
 ) {
@@ -234,21 +256,38 @@ private fun ColumnScope.SettingsRow(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
             )
             if (statusText != null) {
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
-                )
+                if (statusTone != null) {
+                    TalkcanStatusBadge(
+                        label = statusText,
+                        tone = statusTone,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                } else {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                            alpha = contentAlpha,
+                        ),
+                    )
+                }
             }
         }
         if (enabled && onClick != null) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(2.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
