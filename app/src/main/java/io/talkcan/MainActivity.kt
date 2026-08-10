@@ -14,11 +14,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -32,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -75,6 +78,10 @@ import io.talkcan.ui.ChannelConfigurationSubmitResult
 import io.talkcan.ui.synthesisVoiceChoicesFor
 import io.talkcan.ui.bootstrapRootSurface
 import io.talkcan.ui.theme.TalkcanTheme
+import io.talkcan.ui.theme.Graphite
+import io.talkcan.ui.theme.MutedSteel
+import io.talkcan.ui.theme.SignalAmber
+import io.talkcan.ui.theme.WarmAluminum
 
 
 class MainActivity : ComponentActivity() {
@@ -636,14 +643,22 @@ class MainActivity : ComponentActivity() {
                                 bottomBar = {
                                     val navigationItemColors =
                                         NavigationBarItemDefaults.colors(
-                                            selectedIconColor =
-                                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                            selectedTextColor =
-                                                MaterialTheme.colorScheme.primary,
-                                            indicatorColor =
-                                                MaterialTheme.colorScheme.primaryContainer,
+                                            selectedIconColor = SignalAmber,
+                                            selectedTextColor = SignalAmber,
+                                            unselectedIconColor =
+                                                WarmAluminum.copy(alpha = 0.72f),
+                                            unselectedTextColor =
+                                                WarmAluminum.copy(alpha = 0.72f),
+                                            indicatorColor = Graphite,
                                         )
-                                    NavigationBar {
+                                    NavigationBar(
+                                        modifier = Modifier.border(
+                                            width = 1.dp,
+                                            color = MutedSteel,
+                                        ),
+                                        containerColor = Graphite,
+                                        tonalElevation = 0.dp,
+                                    ) {
                                         NavigationBarItem(
                                             selected = appSection == AppSection.Radio,
                                             onClick = actions::navigateToRadio,
@@ -653,7 +668,12 @@ class MainActivity : ComponentActivity() {
                                                     contentDescription = "Radio",
                                                 )
                                             },
-                                            label = { Text("Radio") },
+                                            label = {
+                                                Text(
+                                                    text = "Radio",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                )
+                                            },
                                             colors = navigationItemColors,
                                         )
                                         NavigationBarItem(
@@ -665,7 +685,12 @@ class MainActivity : ComponentActivity() {
                                                     contentDescription = "Settings",
                                                 )
                                             },
-                                            label = { Text("Settings") },
+                                            label = {
+                                                Text(
+                                                    text = "Settings",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                )
+                                            },
                                             colors = navigationItemColors,
                                         )
                                     }
@@ -713,7 +738,10 @@ class MainActivity : ComponentActivity() {
                                                         SecondaryRoute.VoiceProfiles -> "Voice profiles"
                                                         SecondaryRoute.SystemReadiness -> "System readiness"
                                                     }
-                                                    Text(routeTitle)
+                                                    Text(
+                                                        text = routeTitle,
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                    )
                                                 },
                                                 navigationIcon = {
                                                     IconButton(onClick = actions::navigateBack) {
@@ -723,6 +751,11 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     }
                                                 },
+                                                colors = TopAppBarDefaults.topAppBarColors(
+                                                    containerColor = Graphite,
+                                                    navigationIconContentColor = WarmAluminum,
+                                                    titleContentColor = WarmAluminum,
+                                                ),
                                             )
                                         },
                                     ) { innerPadding ->
