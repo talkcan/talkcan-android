@@ -1,6 +1,6 @@
 package io.talkcan.ui
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -22,15 +22,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.talkcan.R
 import io.talkcan.ui.theme.Graphite
 import io.talkcan.ui.theme.MutedSteel
 import io.talkcan.ui.theme.NearBlack
@@ -126,56 +126,12 @@ internal fun TalkcanBrandLabel(
 internal fun TalkcanMark(
     modifier: Modifier = Modifier,
 ) {
-    val plateColor = MaterialTheme.colorScheme.onSurfaceVariant
-    Canvas(modifier = modifier) {
-        val stroke = size.minDimension * 0.04f
-        val rectTopLeft = Offset(size.width * 0.1f, size.height * 0.1f)
-        val rectSize = Size(size.width * 0.8f, size.height * 0.8f)
-
-        drawRect(
-            color = plateColor,
-            topLeft = rectTopLeft,
-            size = rectSize,
-            style = Stroke(width = stroke),
-        )
-
-        drawLine(
-            color = SignalAmber,
-            start = Offset(0f, size.height * 0.5f),
-            end = Offset(size.width * 0.35f, size.height * 0.5f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Square,
-        )
-
-        drawLine(
-            color = SignalAmber,
-            start = Offset(size.width * 0.35f, size.height * 0.3f),
-            end = Offset(size.width * 0.35f, size.height * 0.7f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Square,
-        )
-
-        val endpoints = listOf(
-            Offset(size.width * 0.7f, size.height * 0.3f),
-            Offset(size.width * 0.7f, size.height * 0.5f),
-            Offset(size.width * 0.7f, size.height * 0.7f),
-        )
-
-        endpoints.forEach { endpoint ->
-            drawLine(
-                color = SignalAmber,
-                start = Offset(size.width * 0.35f, endpoint.y),
-                end = endpoint,
-                strokeWidth = stroke,
-                cap = StrokeCap.Square,
-            )
-            drawRect(
-                color = StatusCyan,
-                topLeft = Offset(endpoint.x, endpoint.y - stroke * 1.5f),
-                size = Size(stroke * 3f, stroke * 3f),
-            )
-        }
-    }
+    Image(
+        painter = painterResource(R.mipmap.ic_launcher_talkcan_foreground),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = modifier,
+    )
 }
 
 internal enum class TalkcanStatusTone {
