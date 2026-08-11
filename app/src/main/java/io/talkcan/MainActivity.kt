@@ -80,7 +80,7 @@ import io.talkcan.ui.bootstrapRootSurface
 import io.talkcan.ui.theme.TalkcanTheme
 import io.talkcan.ui.theme.Graphite
 import io.talkcan.ui.theme.ControlSteel
-import io.talkcan.ui.theme.SignalAmber
+import io.talkcan.ui.theme.StatusCyan
 import io.talkcan.ui.theme.WarmAluminum
 
 
@@ -643,8 +643,8 @@ class MainActivity : ComponentActivity() {
                                 bottomBar = {
                                     val navigationItemColors =
                                         NavigationBarItemDefaults.colors(
-                                            selectedIconColor = SignalAmber,
-                                            selectedTextColor = SignalAmber,
+                                            selectedIconColor = StatusCyan,
+                                            selectedTextColor = StatusCyan,
                                             unselectedIconColor =
                                                 WarmAluminum.copy(alpha = 0.72f),
                                             unselectedTextColor =
