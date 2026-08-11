@@ -31,7 +31,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -334,7 +334,7 @@ private fun ModeSegment(
     modifier: Modifier = Modifier,
 ) {
     val accent = when {
-        isActive -> SignalAmber
+        isActive -> StatusCyan
         else -> ControlSteel
     }
     val contentColor = if (isAvailable) {
@@ -343,8 +343,8 @@ private fun ModeSegment(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
     val statusColor = when {
-        isActive -> SignalAmber
-        isAvailable -> StatusCyan
+        isActive -> StatusCyan
+        isAvailable -> SignalAmber
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -378,7 +378,7 @@ private fun ModeSegment(
         ) {
             ModeGlyph(
                 mode = mode,
-                color = if (isActive) SignalAmber else contentColor,
+                color = if (isActive) StatusCyan else contentColor,
                 modifier = Modifier.size(32.dp),
             )
             Text(
@@ -518,7 +518,7 @@ private fun ChannelCard(
     )
     val statusTone = when {
         !isImmediatelyAvailable -> TalkcanStatusTone.Error
-        isActive -> TalkcanStatusTone.Active
+        isActive -> TalkcanStatusTone.Selected
         channel.playbackPaused -> TalkcanStatusTone.Neutral
         else -> TalkcanStatusTone.Ready
     }
@@ -536,7 +536,7 @@ private fun ChannelCard(
         is ChannelPreparationAvailability.Unavailable -> preparation.reason.message
     }
     val panelBorderColor = when {
-        isActive -> SignalAmber
+        isActive -> StatusCyan
         !isImmediatelyAvailable -> MaterialTheme.colorScheme.error
         else -> ControlSteel
     }
@@ -545,81 +545,61 @@ private fun ChannelCard(
         modifier = Modifier.fillMaxWidth(),
         borderColor = panelBorderColor,
         containerColor = NearBlack,
-        contentPadding = 18.dp,
+        contentPadding = 12.dp,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 80.dp)
-                .then(interactionModifier),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = channel.name,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                StatusPill(
-                    label = presentation.statusLabel,
-                    tone = statusTone,
-                )
-            }
-            Text(
-                text = descriptor?.presentation?.summary
-                    ?: channel.implementationId.value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            availabilityMessage?.let { reason ->
-                Text(
-                    text = "$reason ${
-                        descriptor?.presentation?.unavailableMessage.orEmpty()
-                    }".trim(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (!isImmediatelyAvailable) {
-                Text(
-                    text = "Open channel settings to repair this route.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            val pendingLabel = pendingResponseLabel(channel.pendingCount)
-            if (pendingLabel != null) {
-                StatusPill(
-                    label = pendingLabel,
-                    tone = TalkcanStatusTone.Ready,
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .clickable(
-                            role = Role.Button,
-                            onClick = { actions.setActiveChannel(channel.id) },
-                        )
-                        .testTag("channel-pending-${channel.id}"),
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp)
+                    .then(interactionModifier)
+                    .padding(vertical = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = channel.name,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    StatusPill(
+                        label = presentation.statusLabel,
+                        tone = statusTone,
+                    )
+                }
+                Text(
+                    text = descriptor?.presentation?.summary
+                        ?: channel.implementationId.value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            } else {
-                Spacer(modifier = Modifier.size(1.dp))
+                availabilityMessage?.let { reason ->
+                    Text(
+                        text = "$reason ${
+                            descriptor?.presentation?.unavailableMessage.orEmpty()
+                        }".trim(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            TextButton(
+            IconButton(
                 onClick = {
                     actions.navigateToChannelConfiguration(channel.id)
                 },
@@ -628,11 +608,23 @@ private fun ChannelCard(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Settings,
-                    contentDescription = null,
+                    contentDescription = "Settings for ${channel.name}",
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Settings")
             }
+        }
+
+        pendingResponseLabel(channel.pendingCount)?.let { pendingLabel ->
+            StatusPill(
+                label = pendingLabel,
+                tone = TalkcanStatusTone.Ready,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(
+                        role = Role.Button,
+                        onClick = { actions.setActiveChannel(channel.id) },
+                    )
+                    .testTag("channel-pending-${channel.id}"),
+            )
         }
     }
 }

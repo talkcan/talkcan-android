@@ -138,6 +138,7 @@ internal fun TalkcanMark(
 
 internal enum class TalkcanStatusTone {
     Neutral,
+    Selected,
     Active,
     Ready,
     Recording,
@@ -153,8 +154,9 @@ internal fun TalkcanStatusBadge(
 ) {
     val toneColor = when (tone) {
         TalkcanStatusTone.Neutral -> WarmAluminum.copy(alpha = 0.72f)
-        TalkcanStatusTone.Active -> SignalAmber
-        TalkcanStatusTone.Ready -> StatusCyan
+        TalkcanStatusTone.Selected -> StatusCyan
+        TalkcanStatusTone.Active -> StatusCyan
+        TalkcanStatusTone.Ready -> SignalAmber
         TalkcanStatusTone.Recording -> SignalAmber
         TalkcanStatusTone.Attention -> WarmAluminum
         TalkcanStatusTone.Error -> TalkcanError
