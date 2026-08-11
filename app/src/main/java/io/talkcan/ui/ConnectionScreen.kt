@@ -191,6 +191,7 @@ fun TerminalHeader(
     subtitle: String,
     onLongPress: (() -> Unit)? = null,
     compact: Boolean = false,
+    showBrand: Boolean = true,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 14.dp),
@@ -203,7 +204,9 @@ fun TerminalHeader(
             Modifier
         },
     ) {
-        TalkcanBrandLabel(compact = compact)
+        if (showBrand) {
+            TalkcanBrandLabel(compact = compact)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = title,

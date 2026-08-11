@@ -107,7 +107,9 @@ internal fun TalkcanBrandLabel(
         horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TalkcanMark(modifier = Modifier.size(if (compact) 32.dp else 42.dp))
+        TalkcanMark(
+            modifier = Modifier.size(if (compact) 52.dp else 60.dp),
+        )
         Text(
             text = "TALKCAN",
             style = if (compact) {
@@ -127,7 +129,7 @@ internal fun TalkcanMark(
     modifier: Modifier = Modifier,
 ) {
     Image(
-        painter = painterResource(R.mipmap.ic_launcher_talkcan_foreground),
+        painter = painterResource(R.drawable.talkcan_mark),
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = modifier,

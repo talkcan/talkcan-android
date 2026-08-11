@@ -25,7 +25,7 @@ private val TalkcanDarkScheme = darkColorScheme(
     surface = NearBlack,
     onSurface = WarmAluminum,
     surfaceVariant = NearBlack,
-    onSurfaceVariant = WarmAluminum.copy(alpha = 0.72f),
+    onSurfaceVariant = MutedText,
     outline = MutedSteel,
     outlineVariant = MutedSteel,
     error = TalkcanError,
