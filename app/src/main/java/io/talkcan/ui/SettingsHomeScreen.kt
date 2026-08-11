@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import io.talkcan.ui.theme.ControlSteel
 @Composable
 fun SettingsHomeScreen(
     onRsmClick: () -> Unit,
@@ -225,7 +226,6 @@ private fun ColumnScope.SettingsRow(
     enabled: Boolean,
     onClick: (() -> Unit)?,
 ) {
-    val contentAlpha = if (enabled) 1f else 0.78f
     val rowModifier = Modifier
         .fillMaxWidth()
         .then(
@@ -253,7 +253,11 @@ private fun ColumnScope.SettingsRow(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
             if (statusText != null) {
                 if (statusTone != null) {
@@ -266,9 +270,7 @@ private fun ColumnScope.SettingsRow(
                     Text(
                         text = statusText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                            alpha = contentAlpha,
-                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -277,7 +279,7 @@ private fun ColumnScope.SettingsRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(2.dp)),
+                    .border(1.dp, ControlSteel, RoundedCornerShape(2.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

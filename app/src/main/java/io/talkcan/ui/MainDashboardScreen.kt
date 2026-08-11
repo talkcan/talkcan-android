@@ -66,7 +66,7 @@ import io.talkcan.service.ChannelPreparationAvailability
 import io.talkcan.service.ChannelRuntimeSnapshot
 import io.talkcan.ui.theme.Graphite
 import io.talkcan.ui.theme.SignalAmber
-import io.talkcan.ui.theme.MutedSteel
+import io.talkcan.ui.theme.ControlSteel
 import io.talkcan.ui.theme.NearBlack
 import io.talkcan.ui.theme.StatusCyan
 import io.talkcan.ui.theme.WarmAluminum
@@ -335,8 +335,7 @@ private fun ModeSegment(
 ) {
     val accent = when {
         isActive -> SignalAmber
-        isAvailable -> MutedSteel
-        else -> MaterialTheme.colorScheme.outlineVariant
+        else -> ControlSteel
     }
     val contentColor = if (isAvailable) {
         MaterialTheme.colorScheme.onSurface
@@ -539,7 +538,7 @@ private fun ChannelCard(
     val panelBorderColor = when {
         isActive -> SignalAmber
         !isImmediatelyAvailable -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.outlineVariant
+        else -> ControlSteel
     }
 
     TalkcanInstrumentPanel(
@@ -798,7 +797,7 @@ private fun PhonePttDock(
             subtitle = "Select a channel above"
             containerColor = NearBlack
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            borderColor = MaterialTheme.colorScheme.outlineVariant
+            borderColor = ControlSteel
         }
         isPlaybackActive -> {
             title = "Playback active"

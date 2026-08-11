@@ -79,7 +79,7 @@ import io.talkcan.ui.synthesisVoiceChoicesFor
 import io.talkcan.ui.bootstrapRootSurface
 import io.talkcan.ui.theme.TalkcanTheme
 import io.talkcan.ui.theme.Graphite
-import io.talkcan.ui.theme.MutedSteel
+import io.talkcan.ui.theme.ControlSteel
 import io.talkcan.ui.theme.SignalAmber
 import io.talkcan.ui.theme.WarmAluminum
 
@@ -654,7 +654,7 @@ class MainActivity : ComponentActivity() {
                                     NavigationBar(
                                         modifier = Modifier.border(
                                             width = 1.dp,
-                                            color = MutedSteel,
+                                            color = ControlSteel,
                                         ),
                                         containerColor = Graphite,
                                         tonalElevation = 0.dp,

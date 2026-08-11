@@ -54,6 +54,7 @@ fun BootstrapLoadingScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
+            showBrand = false,
             title = "Starting Talkcan",
             subtitle = when (state) {
                 is BootstrapState.ConnectingService ->
