@@ -38,9 +38,30 @@ jobs:
       - name: Provision debug keystore
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
         run: |
           mkdir -p .android
-          printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > .android/debug.keystore
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > .android/debug.keystore
+          elif [ "$EVENT_NAME" = "pull_request" ] &&
+               [ "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]; then
+            nix develop --no-write-lock-file -c keytool -genkeypair \
+              -keystore .android/debug.keystore \
+              -storetype JKS \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -noprompt
+          else
+            echo "ANDROID_DEBUG_KEYSTORE_BASE64 is required outside fork pull requests" >&2
+            exit 1
+          fi
           test -s .android/debug.keystore
 
       - name: Run JVM tests
