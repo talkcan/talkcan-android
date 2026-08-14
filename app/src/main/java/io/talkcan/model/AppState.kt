@@ -11,6 +11,7 @@ data class AppState(
     // setupState removed: bootstrap state is now owned by BootstrapCoordinator
     val inputModeAvailability: InputModeAvailability = InputModeAvailability(),
     val carHfpConfiguration: CarHfpConfigurationState = CarHfpConfigurationState(),
+    val pttAudioState: PttAudioOperationState = PttAudioOperationState(),
 ) {
     val readyForMonitor: Boolean
         get() = connection.readyForMonitor

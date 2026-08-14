@@ -1130,6 +1130,16 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
         updateInputMode()
 
         updateCarMediaState()
+        serviceScope.launch {
+            combine(
+                audioSessionManager.sessionState,
+                hostAudioCoordinator.isPlaybackActive
+            ) { session, playbackActive ->
+                session.copy(isPlaybackActive = playbackActive)
+            }.collect { combinedState ->
+                stateProjector.publishPttAudioState(combinedState)
+            }
+        }
     }
     private fun transcriptionCapability(identity: CapabilityScopeIdentity) =
         coreInitializer.transcriptionCapability(identity)

@@ -19,6 +19,11 @@ import io.talkcan.audio.routeDebugString
 import io.talkcan.channel.capability.recordedPcmOf
 import io.talkcan.model.InputMode
 import io.talkcan.model.PttSource
+import io.talkcan.model.PttAudioOperationState
+import io.talkcan.model.PttAudioOperationPhase
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +63,28 @@ internal class PttAudioSessionManager(
     private var active: ActiveSession? = null
     private var shutdown = false
 
+    private val _sessionState = MutableStateFlow(PttAudioOperationState())
+    val sessionState: StateFlow<PttAudioOperationState> = _sessionState.asStateFlow()
+
+    private fun updateStateLocked() {
+        val session = active
+        val snapshot = if (session != null) {
+            val phase = when {
+                session.terminalClaim != TerminalClaim.None -> PttAudioOperationPhase.FINALIZING
+                session.captureSession != null -> PttAudioOperationPhase.RECORDING
+                else -> PttAudioOperationPhase.PENDING
+            }
+            PttAudioOperationState(
+                source = session.source,
+                channelId = session.channelId,
+                mode = session.mode,
+                phase = phase
+            )
+        } else {
+            PttAudioOperationState()
+        }
+        _sessionState.value = snapshot
+    }
     init {
         require(targetReleaseTimeoutMillis > 0) { "Target release timeout must be positive" }
         require(shutdownAwaitTimeoutMillis > 0) { "Shutdown await timeout must be positive" }
@@ -77,7 +104,10 @@ internal class PttAudioSessionManager(
                 source = source,
                 channelId = channelId,
                 mode = mode,
-            ).also { active = it }
+            ).also {
+                active = it
+                updateStateLocked()
+            }
         }
         logRoute("AUDIO_SESSION_PENDING id=${session.id} source=$source channel=$channelId mode=$mode")
         return true
@@ -93,7 +123,10 @@ internal class PttAudioSessionManager(
                     source = source,
                     channelId = channelId,
                     mode = mode,
-                ).also { active = it }
+                ).also {
+                    active = it
+                    updateStateLocked()
+                }
                 existing.source == source && existing.route == null && existing.setupJob == null &&
                     existing.terminalClaim == TerminalClaim.None -> existing
                 else -> return false
@@ -387,6 +420,7 @@ internal class PttAudioSessionManager(
         session.terminalReason = reason
         session.playProblemFeedback = playProblemFeedback
         session.pttDown = false
+        updateStateLocked()
         return TerminalRequest(session, session.setupJob)
     }
 
@@ -441,7 +475,10 @@ internal class PttAudioSessionManager(
         val capture = synchronized(lock) {
             if (session.captureTerminationAttempted) return CaptureTermination.None
             session.captureTerminationAttempted = true
-            session.captureSession.also { session.captureSession = null }
+            session.captureSession.also {
+                session.captureSession = null
+                updateStateLocked()
+            }
         } ?: return CaptureTermination.None
 
         val recording = if (session.terminalClaim == TerminalClaim.NormalRelease) {
@@ -524,6 +561,7 @@ internal class PttAudioSessionManager(
             return Attachment.TerminalCompleted
         }
         session.captureSession = capture
+        updateStateLocked()
         if (session.terminalClaim == TerminalClaim.None) Attachment.Open else Attachment.TerminalQueued
     }
 
@@ -608,6 +646,7 @@ internal class PttAudioSessionManager(
             if (session.completionPublished) return
             session.completionPublished = true
             if (active === session) active = null
+            updateStateLocked()
             session.terminalCompletion()
         }
         try {

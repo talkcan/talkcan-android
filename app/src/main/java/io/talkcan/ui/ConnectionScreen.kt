@@ -190,9 +190,11 @@ fun TerminalHeader(
     title: String,
     subtitle: String,
     onLongPress: (() -> Unit)? = null,
+    compact: Boolean = false,
+    showBrand: Boolean = true,
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 14.dp),
         modifier = if (onLongPress != null) {
             Modifier.combinedClickable(
                 onClick = {},
@@ -202,16 +204,26 @@ fun TerminalHeader(
             Modifier
         },
     ) {
-        TalkcanBrandLabel()
+        if (showBrand) {
+            TalkcanBrandLabel(compact = compact)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineMedium,
+                style = if (compact) {
+                    MaterialTheme.typography.headlineSmall
+                } else {
+                    MaterialTheme.typography.headlineMedium
+                },
                 fontWeight = FontWeight.Bold,
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyLarge,
+                style = if (compact) {
+                    MaterialTheme.typography.bodyMedium
+                } else {
+                    MaterialTheme.typography.bodyLarge
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

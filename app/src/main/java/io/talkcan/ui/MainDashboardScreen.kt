@@ -1,8 +1,16 @@
 package io.talkcan.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,18 +26,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,7 +49,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,13 +57,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.talkcan.model.AppState
+import io.talkcan.model.PttAudioOperationState
+import io.talkcan.model.PttAudioOperationPhase
+import io.talkcan.model.PttSource
 import io.talkcan.model.ChannelImplementationDescriptor
 import io.talkcan.model.InputMode
 import io.talkcan.service.ChannelPreparationAvailability
 import io.talkcan.service.ChannelRuntimeSnapshot
 import io.talkcan.ui.theme.Graphite
 import io.talkcan.ui.theme.SignalAmber
-import io.talkcan.ui.theme.MutedSteel
+import io.talkcan.ui.theme.ControlSteel
 import io.talkcan.ui.theme.NearBlack
 import io.talkcan.ui.theme.StatusCyan
 import io.talkcan.ui.theme.WarmAluminum
@@ -76,21 +81,24 @@ fun MainDashboardScreen(
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val phonePttLockThresholdPx = with(LocalDensity.current) { PhonePttLockThreshold.toPx() }
     var phonePttGesture by remember { mutableStateOf<PhonePttGestureState>(PhonePttGestureState.Idle) }
+    var phonePttTargetChannelId by remember { mutableStateOf<String?>(null) }
 
     fun applyPhonePttTransition(transition: PhonePttGestureTransition) {
         phonePttGesture = transition.state
         for (command in transition.commands) {
-            val channelId = when (val state = transition.state) {
-                PhonePttGestureState.Idle -> return
-                is PhonePttGestureState.Armed -> state.channelId
-                is PhonePttGestureState.Locked -> state.channelId
-                is PhonePttGestureState.Finalized -> state.channelId
-            }
             when (command) {
-                PhonePttGestureCommand.Press -> actions.phonePttPressed(channelId)
-                PhonePttGestureCommand.Release -> actions.phonePttReleased(channelId)
+                is PhonePttGestureCommand.Press -> {
+                    phonePttTargetChannelId = command.channelId
+                    actions.phonePttPressed(command.channelId)
+                }
+                is PhonePttGestureCommand.Release -> {
+                    val target = phonePttTargetChannelId
+                    phonePttTargetChannelId = null
+                    if (target != null) {
+                        actions.phonePttReleased(target)
+                    }
+                }
             }
         }
         if (transition.state is PhonePttGestureState.Finalized) {
@@ -120,33 +128,43 @@ fun MainDashboardScreen(
     TalkcanInstrumentBackdrop(
         modifier = modifier.fillMaxSize(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            DashboardHeader(
-                appState = appState,
-                isCapturing = isCapturing,
-                onActivityLog = actions::navigateToLogAnalysis,
-            )
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                DashboardHeader(
+                    appState = appState,
+                    isCapturing = isCapturing,
+                )
 
-            DashboardTalkLevel(
+                ChannelPanel(
+                    appState = appState,
+                    providerDescriptors = providerDescriptors,
+                    actions = actions,
+                )
+            }
+
+            DashboardOperationalPanel(
+                appState = appState,
                 level = level,
                 isCapturing = isCapturing,
+                actions = actions,
             )
 
-            InputModeSelector(appState, actions)
-
-            ChannelPanel(
-                appState = appState,
-                providerDescriptors = providerDescriptors,
-                actions = actions,
+            val activeChannel = appState.channels.firstOrNull {
+                it.id == appState.activeChannelId
+            }
+            PhonePttDock(
+                activeChannel = activeChannel,
                 phonePttGesture = phonePttGesture,
-                phonePttLockThresholdPx = phonePttLockThresholdPx,
+                phonePttTargetChannelId = phonePttTargetChannelId,
                 onPhonePttTransition = ::applyPhonePttTransition,
+                pttAudioState = appState.pttAudioState,
             )
         }
     }
@@ -156,11 +174,7 @@ fun MainDashboardScreen(
 private fun DashboardHeader(
     appState: AppState,
     isCapturing: Boolean,
-    onActivityLog: () -> Unit,
 ) {
-    val activeChannel = appState.channels.firstOrNull {
-        it.id == appState.activeChannelId
-    }
     val statusLabel = when {
         isCapturing -> "Recording"
         appState.connection.readyForMonitor -> "Radio connected"
@@ -173,51 +187,47 @@ private fun DashboardHeader(
         appState.inputMode == InputMode.OnAPinch -> TalkcanStatusTone.Ready
         else -> TalkcanStatusTone.Attention
     }
-    val statusColor = when {
-        isCapturing -> SignalAmber
-        appState.connection.readyForMonitor -> StatusCyan
-        appState.inputMode == InputMode.OnAPinch -> StatusCyan
-        else -> WarmAluminum
-    }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TalkcanBrandLabel()
-            TextButton(onClick = onActivityLog) {
-                Text(
-                    text = "Activity",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-        }
-        TalkcanInstrumentPanel(
-            modifier = Modifier.fillMaxWidth(),
-            borderColor = statusColor,
-        ) {
-            TalkcanStatusBadge(
-                label = statusLabel,
-                tone = statusTone,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TalkcanBrandLabel(compact = true)
+        TalkcanStatusBadge(
+            label = statusLabel,
+            tone = statusTone,
+        )
+    }
+}
+
+@Composable
+private fun DashboardOperationalPanel(
+    appState: AppState,
+    level: Float,
+    isCapturing: Boolean,
+    actions: PttUiActions,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(OPERATIONAL_PANEL_HEIGHT)
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("dashboard-operational-panel"),
+    ) {
+        if (isCapturing) {
+            DashboardTalkLevel(
+                level = level,
+                isCapturing = true,
+                modifier = Modifier.fillMaxSize(),
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = activeChannel?.name ?: "Choose a channel",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = if (activeChannel == null) {
-                    "Your talk button will route here once a channel is selected."
-                } else {
-                    "Selected channel · your next recording goes here."
-                },
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else {
+            InputModeSelector(
+                appState = appState,
+                actions = actions,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -227,25 +237,28 @@ private fun DashboardHeader(
 private fun DashboardTalkLevel(
     level: Float,
     isCapturing: Boolean,
+    modifier: Modifier = Modifier,
 ) {
-    TalkcanInstrumentPanel(
-        modifier = Modifier.fillMaxWidth(),
-        borderColor = if (isCapturing) {
-            SignalAmber
-        } else {
-            MaterialTheme.colorScheme.outlineVariant
-        },
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         TalkcanSectionHeader(
-            title = if (isCapturing) "Recording now" else "Talk level",
-            supportingText = if (isCapturing) {
-                "Keep your voice in the clear range."
-            } else {
-                "Hold the talk button to start."
-            },
+            title = "Talk level",
+            supportingText = "Recording now · Aim for Clear.",
+            compact = true,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        VuMeter(level = level, isCapturing = isCapturing)
+        TalkcanInstrumentPanel(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(OPERATIONAL_CONTENT_HEIGHT)
+                .testTag("talk-level-card"),
+            borderColor = SignalAmber,
+            containerColor = NearBlack,
+            contentPadding = 14.dp,
+        ) {
+            VuMeter(level = level, isCapturing = isCapturing)
+        }
     }
 }
 
@@ -253,57 +266,56 @@ private fun DashboardTalkLevel(
 private fun InputModeSelector(
     appState: AppState,
     actions: PttUiActions,
+    modifier: Modifier = Modifier,
 ) {
     val availability = appState.inputModeAvailability
     val activeMode = appState.inputMode
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         TalkcanSectionHeader(
-            title = "Talk from",
-            supportingText = "Choose which microphone and talk button Talkcan uses.",
+            title = "Audio device",
+            supportingText = "Replies use this route; PTT switches automatically.",
+            compact = true,
         )
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ModeSegment(
                 mode = InputMode.Work,
                 label = "Radio",
-                status = if (availability.work) "Ready" else "Set up",
+                status = if (availability.work) "Ready" else "Unavailable",
                 isActive = activeMode == InputMode.Work,
                 isAvailable = availability.work,
-                onTileAction = {
-                    action -> handleModeTileAction(action, InputMode.Work, actions)
+                onSelected = {
+                    actions.setInputMode(InputMode.Work)
                 },
                 modifier = Modifier.weight(1f),
             )
             ModeSegment(
                 mode = InputMode.OnTheRoad,
                 label = "Car",
-                status = if (availability.onTheRoad) "Ready" else "Set up",
+                status = if (availability.onTheRoad) "Ready" else "Unavailable",
                 isActive = activeMode == InputMode.OnTheRoad,
                 isAvailable = availability.onTheRoad,
-                onTileAction = {
-                    action -> handleModeTileAction(
-                        action,
-                        InputMode.OnTheRoad,
-                        actions,
-                    )
+                onSelected = {
+                    actions.setInputMode(InputMode.OnTheRoad)
                 },
                 modifier = Modifier.weight(1f),
             )
             ModeSegment(
                 mode = InputMode.OnAPinch,
                 label = "Phone",
-                status = "Ready",
+                status = if (availability.onAPinch) "Ready" else "Unavailable",
                 isActive = activeMode == InputMode.OnAPinch,
                 isAvailable = availability.onAPinch,
-                onTileAction = {
-                    action -> handleModeTileAction(
-                        action,
-                        InputMode.OnAPinch,
-                        actions,
-                    )
+                onSelected = {
+                    actions.setInputMode(InputMode.OnAPinch)
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -312,20 +324,18 @@ private fun InputModeSelector(
 }
 
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun ModeSegment(
     mode: InputMode,
     label: String,
     status: String,
     isActive: Boolean,
     isAvailable: Boolean,
-    onTileAction: (DashboardModeTileAction) -> Unit,
+    onSelected: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accent = when {
-        isActive -> SignalAmber
-        isAvailable -> MutedSteel
-        else -> MaterialTheme.colorScheme.outlineVariant
+        isActive -> StatusCyan
+        else -> ControlSteel
     }
     val contentColor = if (isAvailable) {
         MaterialTheme.colorScheme.onSurface
@@ -333,24 +343,30 @@ private fun ModeSegment(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
     val statusColor = when {
-        isActive -> SignalAmber
-        isAvailable -> StatusCyan
+        isActive -> StatusCyan
+        isAvailable -> SignalAmber
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     TalkcanInstrumentPanel(
         modifier = modifier
-            .height(112.dp)
-            .combinedClickable(
-                onClick = {
-                    onTileAction(dashboardModeTileTapAction(mode, isAvailable))
-                },
-                onLongClick = if (mode != InputMode.OnAPinch) {
-                    { onTileAction(dashboardModeTileLongPressAction(mode)) }
+            .height(OPERATIONAL_CONTENT_HEIGHT)
+            .selectable(
+                selected = isActive,
+                enabled = isAvailable,
+                role = Role.RadioButton,
+                onClick = onSelected,
+            )
+            .semantics {
+                stateDescription = if (isActive) {
+                    "Selected"
+                } else if (!isAvailable) {
+                    "Unavailable"
                 } else {
-                    null
-                },
-            ),
+                    "Available"
+                }
+            }
+            .testTag("device-tile-${mode.name}"),
         borderColor = accent,
         containerColor = NearBlack,
         contentPadding = 10.dp,
@@ -358,12 +374,12 @@ private fun ModeSegment(
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             ModeGlyph(
                 mode = mode,
-                color = if (isActive) SignalAmber else contentColor,
-                modifier = Modifier.size(38.dp),
+                color = if (isActive) StatusCyan else contentColor,
+                modifier = Modifier.size(32.dp),
             )
             Text(
                 text = label,
@@ -378,33 +394,6 @@ private fun ModeSegment(
                 fontWeight = FontWeight.Medium,
             )
         }
-    }
-}
-
-private fun handleModeTileAction(
-    action: DashboardModeTileAction,
-    mode: InputMode,
-    actions: PttUiActions,
-) = dispatchDashboardModeTileAction(
-    action = action,
-    mode = mode,
-    onModeSelected = actions::setInputMode,
-    onRsmSetupRequested = actions::navigateToRsmSetup,
-    onCarSetupRequested = actions::navigateToCarSetup,
-)
-
-internal fun dispatchDashboardModeTileAction(
-    action: DashboardModeTileAction,
-    mode: InputMode,
-    onModeSelected: (InputMode) -> Unit,
-    onRsmSetupRequested: () -> Unit,
-    onCarSetupRequested: () -> Unit,
-) {
-    when (action) {
-        DashboardModeTileAction.SelectMode -> onModeSelected(mode)
-        DashboardModeTileAction.OpenRsmSetup -> onRsmSetupRequested()
-        DashboardModeTileAction.OpenCarSetup -> onCarSetupRequested()
-        DashboardModeTileAction.Ignore -> Unit
     }
 }
 
@@ -461,203 +450,25 @@ private fun ChannelPanel(
     appState: AppState,
     providerDescriptors: List<ChannelImplementationDescriptor>,
     actions: PttUiActions,
-    phonePttGesture: PhonePttGestureState,
-    phonePttLockThresholdPx: Float,
-    onPhonePttTransition: (PhonePttGestureTransition) -> Unit,
 ) {
-    var isManaging by remember { mutableStateOf(false) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.selectableGroup(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         TalkcanSectionHeader(
             title = "Channels",
-            supportingText = if (isManaging) {
-                "Rename, reorder, configure, or add a route."
-            } else {
-                "Tap to select. Hold to talk. Slide while holding to lock."
-            },
-            actionLabel = if (isManaging) "Done" else "Manage",
-            onAction = { isManaging = !isManaging },
+            supportingText = "Tap to select.",
+            compact = true,
         )
-
-        if (isManaging) {
-            CatalogueManagementPanel(appState, providerDescriptors, actions)
-        } else {
-            appState.channels.forEach { channel ->
-                ChannelCard(
-                    channel = channel,
-                    activeChannelId = appState.activeChannelId,
-                    descriptor = providerDescriptors.firstOrNull {
-                        it.implementationId == channel.implementationId
-                    },
-                    actions = actions,
-                    phonePttGesture = phonePttGesture,
-                    phonePttLockThresholdPx = phonePttLockThresholdPx,
-                    onPhonePttTransition = onPhonePttTransition,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CatalogueManagementPanel(
-    appState: AppState,
-    providerDescriptors: List<ChannelImplementationDescriptor>,
-    actions: PttUiActions,
-) {
-    var newName by remember { mutableStateOf("") }
-    var renameTargetId by remember { mutableStateOf<String?>(null) }
-    var renameText by remember { mutableStateOf("") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedButton(
-            onClick = actions::navigateToPackageManagement,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Manage installed packages")
-        }
-        OutlinedButton(
-            onClick = actions::navigateToVoiceProfiles,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Manage voice profiles")
-        }
-        appState.channels.forEachIndexed { index, channel ->
-            TalkcanInstrumentPanel(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (renameTargetId == channel.id) {
-                        OutlinedTextField(
-                            value = renameText,
-                            onValueChange = { renameText = it },
-                            label = { Text("Channel name") },
-                            modifier = Modifier.weight(1f),
-                        )
-                        Button(
-                            onClick = {
-                                if (renameText.isNotBlank()) {
-                                    actions.renameChannel(channel.id, renameText)
-                                }
-                                renameTargetId = null
-                            },
-                        ) {
-                            Text("Save")
-                        }
-                    } else {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = channel.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            val label = providerDescriptors.firstOrNull {
-                                it.implementationId == channel.implementationId
-                            }?.presentation?.label ?: channel.implementationId.value
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = StatusCyan,
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = {
-                                    renameTargetId = channel.id
-                                    renameText = channel.name
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Filled.Edit,
-                                    contentDescription = "Rename",
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    actions.moveChannel(channel.id, index - 1)
-                                },
-                                enabled = index > 0,
-                            ) {
-                                Text("▲")
-                            }
-                            IconButton(
-                                onClick = {
-                                    actions.moveChannel(channel.id, index + 1)
-                                },
-                                enabled = index < appState.channels.lastIndex,
-                            ) {
-                                Text("▼")
-                            }
-                            IconButton(
-                                onClick = { actions.removeChannel(channel.id) },
-                                enabled = appState.channels.size > 1,
-                            ) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = "Delete",
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        TalkcanInstrumentPanel(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            TalkcanSectionHeader(
-                title = "Add a channel",
-                supportingText = "Name the route, then choose what it connects to.",
+        appState.channels.forEach { channel ->
+            ChannelCard(
+                channel = channel,
+                activeChannelId = appState.activeChannelId,
+                descriptor = providerDescriptors.firstOrNull {
+                    it.implementationId == channel.implementationId
+                },
+                actions = actions,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
-                label = { Text("Display name") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Choose a provider",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            providerDescriptors.forEach { descriptor ->
-                OutlinedButton(
-                    onClick = {
-                        actions.navigateToChannelCreation(
-                            descriptor.implementationId,
-                            newName,
-                        )
-                    },
-                    enabled = newName.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = descriptor.presentation.label,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = descriptor.presentation.summary,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            if (providerDescriptors.isEmpty()) {
-                Text(
-                    text = "No channel providers are currently available.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
         }
     }
 }
@@ -672,19 +483,15 @@ internal data class ChannelCardPresentation(
 internal fun channelCardPresentation(
     isActive: Boolean,
     isAvailable: Boolean,
-    isPttActive: Boolean,
-    isLocked: Boolean,
     playbackPaused: Boolean = false,
 ): ChannelCardPresentation = ChannelCardPresentation(
     statusLabel = when {
-        isLocked -> "Locked"
-        isPttActive -> "Recording"
         playbackPaused -> "Paused"
         isActive -> "Selected"
         !isAvailable -> "Unavailable"
         else -> "Ready"
     },
-    tone = if (isActive && !isPttActive) ChannelCardTone.Primary else ChannelCardTone.Secondary,
+    tone = if (isActive) ChannelCardTone.Primary else ChannelCardTone.Secondary,
 )
 
 internal fun pendingResponseLabel(count: Int): String? = when {
@@ -699,208 +506,126 @@ private fun ChannelCard(
     activeChannelId: String?,
     descriptor: ChannelImplementationDescriptor?,
     actions: PttUiActions,
-    phonePttGesture: PhonePttGestureState,
-    phonePttLockThresholdPx: Float,
-    onPhonePttTransition: (PhonePttGestureTransition) -> Unit,
 ) {
     val channelId = channel.id
     val isActive = activeChannelId == channelId
     val isImmediatelyAvailable =
         channel.preparation is ChannelPreparationAvailability.Available
-    val isPttActive = phonePttGesture.activeChannelId == channelId
-    val isLocked = phonePttGesture.isLocked && isPttActive
     val presentation = channelCardPresentation(
         isActive = isActive,
         isAvailable = isImmediatelyAvailable,
-        isPttActive = isPttActive,
-        isLocked = isLocked,
         playbackPaused = channel.playbackPaused,
     )
     val statusTone = when {
-        isLocked || isPttActive -> TalkcanStatusTone.Recording
         !isImmediatelyAvailable -> TalkcanStatusTone.Error
-        isActive -> TalkcanStatusTone.Active
+        isActive -> TalkcanStatusTone.Selected
         channel.playbackPaused -> TalkcanStatusTone.Neutral
         else -> TalkcanStatusTone.Ready
     }
     val currentSelectChannel by rememberUpdatedState(actions::setActiveChannel)
-    val currentPhonePttTransition by rememberUpdatedState(onPhonePttTransition)
-    val interactionModifier = Modifier.phonePttInput(
-        channelId = channelId,
-        lockThresholdPx = phonePttLockThresholdPx,
-        onSelect = { currentSelectChannel(it) },
-        onPhonePttTransition = { currentPhonePttTransition(it) },
-    )
+    val interactionModifier = Modifier
+        .selectable(
+            selected = isActive,
+            role = Role.RadioButton,
+            onClick = { currentSelectChannel(channelId) },
+        )
+        .testTag("channel-primary-${channel.id}")
     val availabilityMessage = when (val preparation = channel.preparation) {
         ChannelPreparationAvailability.Available -> null
         is ChannelPreparationAvailability.Recoverable -> preparation.reason.message
         is ChannelPreparationAvailability.Unavailable -> preparation.reason.message
     }
     val panelBorderColor = when {
-        isPttActive || isActive -> SignalAmber
+        isActive -> StatusCyan
         !isImmediatelyAvailable -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.outlineVariant
-    }
-    val panelColor = if (isPttActive) SignalAmber else NearBlack
-    val primaryContentColor = if (isPttActive) {
-        Graphite
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-    val secondaryContentColor = if (isPttActive) {
-        Graphite.copy(alpha = 0.72f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        else -> ControlSteel
     }
 
     TalkcanInstrumentPanel(
         modifier = Modifier.fillMaxWidth(),
         borderColor = panelBorderColor,
-        containerColor = panelColor,
-        contentPadding = 18.dp,
+        containerColor = NearBlack,
+        contentPadding = 12.dp,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 80.dp)
-                .then(interactionModifier),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = channel.name,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = primaryContentColor,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                StatusPill(
-                    label = presentation.statusLabel,
-                    tone = statusTone,
-                )
-            }
-            Text(
-                text = descriptor?.presentation?.summary
-                    ?: channel.implementationId.value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = secondaryContentColor,
-            )
-            availabilityMessage?.let { reason ->
-                Text(
-                    text = "$reason ${
-                        descriptor?.presentation?.unavailableMessage.orEmpty()
-                    }".trim(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (!isImmediatelyAvailable) {
-                Text(
-                    text = "Open channel settings to repair this route.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = secondaryContentColor,
-                )
-            }
-            HeldPhonePttInstruction(channelId, phonePttGesture)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            val pendingLabel = pendingResponseLabel(channel.pendingCount)
-            if (pendingLabel != null) {
-                StatusPill(
-                    label = pendingLabel,
-                    tone = TalkcanStatusTone.Ready,
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .clickable(
-                            role = Role.Button,
-                            onClick = { actions.setActiveChannel(channel.id) },
-                        ),
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp)
+                    .then(interactionModifier)
+                    .padding(vertical = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = channel.name,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    StatusPill(
+                        label = presentation.statusLabel,
+                        tone = statusTone,
+                    )
+                }
+                Text(
+                    text = descriptor?.presentation?.summary
+                        ?: channel.implementationId.value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            } else {
-                Spacer(modifier = Modifier.size(1.dp))
+                availabilityMessage?.let { reason ->
+                    Text(
+                        text = "$reason ${
+                            descriptor?.presentation?.unavailableMessage.orEmpty()
+                        }".trim(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            TextButton(
+            IconButton(
                 onClick = {
                     actions.navigateToChannelConfiguration(channel.id)
                 },
                 enabled = descriptor != null,
+                modifier = Modifier.testTag("channel-settings-${channel.id}"),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Settings,
-                    contentDescription = null,
-                    tint = primaryContentColor,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Settings",
-                    color = primaryContentColor,
+                    contentDescription = "Settings for ${channel.name}",
                 )
             }
         }
 
-        LockedPhonePttStop(
-            channelId,
-            phonePttGesture,
-            onPhonePttTransition,
-        )
-    }
-}
-@Composable
-private fun HeldPhonePttInstruction(
-    channelId: String,
-    phonePttGesture: PhonePttGestureState,
-) {
-    val armed = phonePttGesture as? PhonePttGestureState.Armed
-    if (armed?.channelId != channelId) return
-    val direction = when (armed.lockDirection) {
-        PhonePttLockDirection.Right -> "Slide right to lock."
-        PhonePttLockDirection.Left -> "Slide left to lock."
-    }
-    Text(
-        text = "Recording. $direction",
-        style = MaterialTheme.typography.bodyMedium,
-        color = Graphite,
-        fontWeight = FontWeight.Bold,
-    )
-}
-
-@Composable
-private fun LockedPhonePttStop(
-    channelId: String,
-    phonePttGesture: PhonePttGestureState,
-    onPhonePttTransition: (PhonePttGestureTransition) -> Unit,
-) {
-    val locked = phonePttGesture as? PhonePttGestureState.Locked
-    if (locked?.channelId != channelId) return
-    Text(
-        text = "Recording is locked on.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = Graphite,
-        fontWeight = FontWeight.Bold,
-    )
-    Button(
-        onClick = {
-            onPhonePttTransition(phonePttGesture.stopPhonePttGesture())
-        },
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Graphite,
-            contentColor = WarmAluminum,
-        ),
-    ) {
-        Text("Stop recording")
+        pendingResponseLabel(channel.pendingCount)?.let { pendingLabel ->
+            StatusPill(
+                label = pendingLabel,
+                tone = TalkcanStatusTone.Ready,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(
+                        role = Role.Button,
+                        onClick = { actions.setActiveChannel(channel.id) },
+                    )
+                    .testTag("channel-pending-${channel.id}"),
+            )
+        }
     }
 }
 
@@ -930,21 +655,289 @@ data class DashboardVuMeterState(
 fun dashboardVuMeterState(isCapturing: Boolean, level: Float): DashboardVuMeterState =
     DashboardVuMeterState(isPresent = true, level = if (isCapturing) level else 0f)
 
-enum class DashboardModeTileAction {
-    SelectMode,
-    OpenRsmSetup,
-    OpenCarSetup,
-    Ignore,
+internal data class PhonePttDockSemantics(
+    val contentDescription: String,
+    val stateDescription: String,
+    val enabled: Boolean,
+)
+
+internal fun phonePttDockSemantics(
+    activeChannel: ChannelRuntimeSnapshot?,
+    phonePttGesture: PhonePttGestureState,
+    phonePttTargetChannelId: String?,
+    pttAudioState: PttAudioOperationState,
+): PhonePttDockSemantics {
+    val activeChannelId = activeChannel?.id
+    val isPlaybackActive = pttAudioState.isPlaybackActive
+    val phase = pttAudioState.phase
+    val source = pttAudioState.source
+
+    val isNonPhoneSession = phase != PttAudioOperationPhase.IDLE && source != PttSource.Phone
+    val isTouchEnabled = activeChannelId != null && !isNonPhoneSession && !isPlaybackActive
+
+    val contentDescription = if (activeChannel != null) {
+        "Talk to ${activeChannel.name}"
+    } else {
+        "choose-channel"
+    }
+
+    val stateDescription = buildString {
+        if (activeChannel != null) {
+            append("Channel: ${activeChannel.name}")
+        } else {
+            append("No active channel")
+        }
+
+        val stateText = when {
+            isPlaybackActive -> "Playback Active"
+            phase == PttAudioOperationPhase.PENDING -> {
+                val srcName = when (source) {
+                    PttSource.Rsm -> "RSM"
+                    PttSource.CarTelecom -> "Car"
+                    else -> "Phone"
+                }
+                "$srcName pending"
+            }
+            phase == PttAudioOperationPhase.RECORDING -> {
+                val srcName = when (source) {
+                    PttSource.Rsm -> "RSM"
+                    PttSource.CarTelecom -> "Car"
+                    else -> "Phone"
+                }
+                "$srcName recording"
+            }
+            phase == PttAudioOperationPhase.FINALIZING -> {
+                val srcName = when (source) {
+                    PttSource.Rsm -> "RSM"
+                    PttSource.CarTelecom -> "Car"
+                    else -> "Phone"
+                }
+                "$srcName finalizing"
+            }
+            activeChannel == null -> {
+                "No active channel"
+            }
+            activeChannel.preparation !is ChannelPreparationAvailability.Available -> {
+                "Channel Unavailable"
+            }
+            else -> {
+                "Ready"
+            }
+        }
+        append(", $stateText")
+
+        if (!isTouchEnabled) {
+            val disabledReason = when {
+                activeChannelId == null -> "No active channel"
+                isPlaybackActive -> "Playback Active"
+                isNonPhoneSession -> {
+                    val srcName = when (source) {
+                        PttSource.Rsm -> "RSM"
+                        PttSource.CarTelecom -> "Car"
+                        else -> "external device"
+                    }
+                    "Session owned by $srcName"
+                }
+                else -> ""
+            }
+            if (disabledReason.isNotEmpty()) {
+                append(", Disabled: $disabledReason")
+            }
+        }
+    }
+
+    return PhonePttDockSemantics(
+        contentDescription = contentDescription,
+        stateDescription = stateDescription,
+        enabled = isTouchEnabled,
+    )
 }
 
-fun dashboardModeTileTapAction(mode: InputMode, isAvailable: Boolean): DashboardModeTileAction = when {
-    isAvailable -> DashboardModeTileAction.SelectMode
-    mode == InputMode.Work -> DashboardModeTileAction.OpenRsmSetup
-    else -> DashboardModeTileAction.Ignore
+
+@Composable
+private fun PhonePttDock(
+    activeChannel: ChannelRuntimeSnapshot?,
+    phonePttGesture: PhonePttGestureState,
+    phonePttTargetChannelId: String?,
+    onPhonePttTransition: (PhonePttGestureTransition) -> Unit,
+    pttAudioState: PttAudioOperationState,
+    modifier: Modifier = Modifier,
+) {
+    val activeChannelId = activeChannel?.id
+    val currentPhonePttGesture by rememberUpdatedState(phonePttGesture)
+    val isPttActive =
+        activeChannelId != null &&
+            phonePttGesture.isActive &&
+            phonePttTargetChannelId == activeChannelId
+    val isPlaybackActive = pttAudioState.isPlaybackActive
+    val phase = pttAudioState.phase
+    val source = pttAudioState.source
+    val isNonPhoneSession =
+        phase != PttAudioOperationPhase.IDLE && source != PttSource.Phone
+    val isTouchEnabled =
+        activeChannelId != null && !isNonPhoneSession && !isPlaybackActive
+
+    val title: String
+    val subtitle: String
+    val containerColor: Color
+    val contentColor: Color
+    val borderColor: Color
+
+    when {
+        activeChannelId == null -> {
+            title = "No channel selected"
+            subtitle = "Select a channel above"
+            containerColor = NearBlack
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            borderColor = ControlSteel
+        }
+        isPlaybackActive -> {
+            title = "Playback active"
+            subtitle = "Talk is unavailable while audio plays"
+            containerColor = NearBlack
+            contentColor = StatusCyan
+            borderColor = StatusCyan
+        }
+        phase == PttAudioOperationPhase.PENDING -> {
+            title = "Connecting"
+            subtitle = when (source) {
+                PttSource.Rsm -> "Preparing radio PTT"
+                PttSource.CarTelecom -> "Preparing car PTT"
+                else -> "Preparing phone microphone"
+            }
+            containerColor = NearBlack
+            contentColor = StatusCyan
+            borderColor = StatusCyan
+        }
+        phase == PttAudioOperationPhase.RECORDING -> {
+            title = when (source) {
+                PttSource.Rsm -> "Recording on radio"
+                PttSource.CarTelecom -> "Recording in car"
+                else -> "Release to send"
+            }
+            subtitle = when (source) {
+                PttSource.Rsm -> "Release radio PTT to send"
+                PttSource.CarTelecom -> "Release car PTT to send"
+                else -> "Recording for ${activeChannel.name}"
+            }
+            containerColor = SignalAmber
+            contentColor = Graphite
+            borderColor = SignalAmber
+        }
+        phase == PttAudioOperationPhase.FINALIZING -> {
+            title = "Sending"
+            subtitle = when (source) {
+                PttSource.Rsm -> "Finishing radio transmission"
+                PttSource.CarTelecom -> "Finishing car transmission"
+                else -> "Finishing ${activeChannel.name} transmission"
+            }
+            containerColor = NearBlack
+            contentColor = StatusCyan
+            borderColor = StatusCyan
+        }
+        activeChannel.preparation !is ChannelPreparationAvailability.Available -> {
+            title = "Channel unavailable"
+            subtitle = "Select another channel above"
+            containerColor = NearBlack
+            contentColor = MaterialTheme.colorScheme.error
+            borderColor = MaterialTheme.colorScheme.error
+        }
+        isPttActive -> {
+            title = "Release to send"
+            subtitle = "Recording for ${activeChannel.name}"
+            containerColor = SignalAmber
+            contentColor = Graphite
+            borderColor = SignalAmber
+        }
+        else -> {
+            title = "Hold to talk"
+            subtitle = "${activeChannel.name} · Release to send"
+            containerColor = NearBlack
+            contentColor = WarmAluminum
+            borderColor = SignalAmber
+        }
+    }
+
+    val currentPhonePttTransition by rememberUpdatedState(onPhonePttTransition)
+    val buttonModifier = activeChannelId
+        ?.takeIf { isTouchEnabled }
+        ?.let { channelId ->
+            Modifier.phonePttInput(
+                channelId = channelId,
+                stateProvider = { currentPhonePttGesture },
+                onPhonePttTransition = { currentPhonePttTransition(it) },
+            )
+        }
+        ?: Modifier
+    val semanticsProjection = phonePttDockSemantics(
+        activeChannel = activeChannel,
+        phonePttGesture = phonePttGesture,
+        phonePttTargetChannelId = phonePttTargetChannelId,
+        pttAudioState = pttAudioState,
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .background(Graphite)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .testTag("phone-ptt-dock"),
+    ) {
+        TalkcanInstrumentPanel(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 96.dp)
+                .then(buttonModifier)
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = semanticsProjection.contentDescription
+                    stateDescription = semanticsProjection.stateDescription
+                    if (!semanticsProjection.enabled) {
+                        disabled()
+                    }
+                }
+                .focusable(),
+            borderColor = borderColor,
+            containerColor = containerColor,
+            contentPadding = 16.dp,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Call,
+                    contentDescription = null,
+                    modifier = Modifier.size(30.dp),
+                    tint = contentColor,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = contentColor,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = contentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
 }
 
-fun dashboardModeTileLongPressAction(mode: InputMode): DashboardModeTileAction = when (mode) {
-    InputMode.Work -> DashboardModeTileAction.OpenRsmSetup
-    InputMode.OnTheRoad -> DashboardModeTileAction.OpenCarSetup
-    InputMode.OnAPinch -> DashboardModeTileAction.Ignore
-}
+
+private val OPERATIONAL_PANEL_HEIGHT = 168.dp
+private val OPERATIONAL_CONTENT_HEIGHT = 96.dp
