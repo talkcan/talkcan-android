@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelAudioInputSession
+import io.talkcan.audio.SemanticFeedbackEmitter
 import io.talkcan.audio.RecordedPcm
 import io.talkcan.channel.capability.CapabilityAvailability
 import io.talkcan.channel.capability.CapabilityKey
@@ -937,6 +938,11 @@ class InstalledLuaPackagesInstrumentationTest {
     private object FakeSession : ChannelAudioInputSession {
         override val sampleRate = 16_000
         override val frames = emptyFlow<ShortArray>()
+        override val maxDurationMs = 60_000L
+        override val remainingDurationMs = 60_000L
+        override val semanticFeedbackEmitter = object : SemanticFeedbackEmitter {
+            override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+        }
     }
 
     private fun v1Archive(): ByteArray = V1_ARCHIVE.copyOf()

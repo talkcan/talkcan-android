@@ -4,6 +4,7 @@ import io.talkcan.audio.ChannelAudioInputSession
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.ChannelInputTarget
+import io.talkcan.audio.CapturePolicy
 import io.talkcan.audio.RecordedPcm
 import io.talkcan.channel.capability.CapabilityAvailability
 import io.talkcan.channel.capability.CapabilityScopeIdentity
@@ -143,7 +144,8 @@ class InstalledProviderRuntimeReconciliationTest {
         val terminalMayFinish = CompletableDeferred<Unit>()
         predecessor.prepare = {
             ChannelInputAcceptance.Accepted(object : ChannelInputTarget {
-                override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+                override val capturePolicy = CapturePolicy(60_000L)
+                override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
                 override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                     events += "G:terminal-started"
@@ -152,8 +154,8 @@ class InstalledProviderRuntimeReconciliationTest {
                     return ChannelInputResult.None
                 }
 
-                override fun onInputCancelled(reason: String) = Unit
-                override fun onInputFailed(reason: String) = Unit
+                override suspend fun onInputCancelled(reason: String) = Unit
+                override suspend fun onInputFailed(reason: String) = Unit
             })
         }
         val committed = committed(fixture.registry.prepareInput(definition.id))
@@ -208,7 +210,8 @@ class InstalledProviderRuntimeReconciliationTest {
         val terminalMayFinish = CompletableDeferred<Unit>()
         predecessor.prepare = {
             ChannelInputAcceptance.Accepted(object : ChannelInputTarget {
-                override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+                override val capturePolicy = CapturePolicy(60_000L)
+                override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
                 override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                     events += "G:terminal-started"
@@ -217,8 +220,8 @@ class InstalledProviderRuntimeReconciliationTest {
                     return ChannelInputResult.None
                 }
 
-                override fun onInputCancelled(reason: String) = Unit
-                override fun onInputFailed(reason: String) = Unit
+                override suspend fun onInputCancelled(reason: String) = Unit
+                override suspend fun onInputFailed(reason: String) = Unit
             })
         }
         val committed = committed(fixture.registry.prepareInput(initialDefinition.id))

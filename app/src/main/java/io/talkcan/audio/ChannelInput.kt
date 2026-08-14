@@ -1,12 +1,27 @@
 package io.talkcan.audio
 
 import io.talkcan.channel.capability.OpaqueAudioOperation
-
+import io.talkcan.service.CaptureFeedbackTone
 import kotlinx.coroutines.flow.Flow
+
+data class CapturePolicy(val maxDurationMs: Long) {
+    init {
+        require(maxDurationMs in 60_000L..600_000L) {
+            "maxDurationMs must be between 60_000 and 600_000 ms, got $maxDurationMs"
+        }
+    }
+}
+
+interface SemanticFeedbackEmitter {
+    suspend fun emit(tone: CaptureFeedbackTone)
+}
 
 interface ChannelAudioInputSession {
     val frames: Flow<ShortArray>
     val sampleRate: Int
+    val maxDurationMs: Long
+    val remainingDurationMs: Long
+    val semanticFeedbackEmitter: SemanticFeedbackEmitter
 }
 
 sealed interface ChannelInputEvent {
@@ -29,11 +44,12 @@ sealed interface ChannelInputAcceptance {
 }
 
 interface ChannelInputTarget {
-    fun onInputStarted(session: ChannelAudioInputSession)
+    val capturePolicy: CapturePolicy
+    suspend fun onInputStarted(session: ChannelAudioInputSession)
     suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult
     fun onInputPlaybackCompleted() {}
-    fun onInputCancelled(reason: String)
-    fun onInputFailed(reason: String)
+    suspend fun onInputCancelled(reason: String)
+    suspend fun onInputFailed(reason: String)
 }
 
 internal class CaptureChannelAudioInputSession(
@@ -41,4 +57,7 @@ internal class CaptureChannelAudioInputSession(
 ) : ChannelAudioInputSession {
     override val frames: Flow<ShortArray> = delegate.frames
     override val sampleRate: Int = delegate.sampleRate
+    override val maxDurationMs: Long = delegate.maxDurationMs
+    override val remainingDurationMs: Long get() = delegate.remainingDurationMs
+    override val semanticFeedbackEmitter: SemanticFeedbackEmitter = delegate.semanticFeedbackEmitter
 }

@@ -1,5 +1,6 @@
 package io.talkcan.audio
 
+import io.talkcan.service.CaptureFeedbackTone
 class TelecomCapturePcmOutput(
     private val captureOutput: PcmOutput,
     private val mediaResponsePlayer: ResponsePlayer,
@@ -16,6 +17,10 @@ class TelecomCapturePcmOutput(
 
     override suspend fun play(recording: RecordedPcm) {
         mediaResponsePlayer.play(recording)
+    }
+
+    override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+        captureOutput.playCaptureFeedback(tone)
     }
 
     override suspend fun releaseRoute() {

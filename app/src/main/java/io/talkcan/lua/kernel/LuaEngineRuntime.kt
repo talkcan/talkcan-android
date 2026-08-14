@@ -393,7 +393,13 @@ internal class LuaEngineRuntime(
     }
 
     fun hostSpawnCallback(): JFunction =
-        schedulerCaptureCallback(setOf(SchedulerContext.STARTUP, SchedulerContext.MANAGED))
+        schedulerCaptureCallback(
+            setOf(
+                SchedulerContext.STARTUP,
+                SchedulerContext.CAPTURE_LIFECYCLE,
+                SchedulerContext.MANAGED,
+            ),
+        )
 
     fun hostDeferCallback(): JFunction = JFunction { callbackLua ->
         val deferred = deferredInSlice
@@ -445,8 +451,11 @@ internal class LuaEngineRuntime(
                     if (Long.MAX_VALUE - now < delayNanos) Long.MAX_VALUE else now + delayNanos
                 }
                 sleepDeadlines[token] = deadline
+                val encodedSeconds = java.math.BigDecimal.valueOf(seconds)
+                    .stripTrailingZeros()
+                    .toPlainString()
                 callbackLua.push(true)
-                callbackLua.push(token)
+                callbackLua.push("$token:$encodedSeconds")
             }
         }
         2
@@ -1077,6 +1086,7 @@ internal class LuaEngineRuntime(
         }
         lua.push(true)
         when (kind) {
+            HostOperationKind.AUDIO_FEEDBACK -> lua.push(true)
             HostOperationKind.TRANSCRIBE -> lua.push(value)
             HostOperationKind.SYNTHESIZE ->
                 pushOpaque(
@@ -1395,10 +1405,11 @@ internal class LuaEngineRuntime(
         )
 
     private fun noteSleepOperation(operationId: Long, label: String) {
-        val token = label.removePrefix(SLEEP_LABEL_PREFIX)
-            .takeIf { label.startsWith(SLEEP_LABEL_PREFIX) }
-            ?.toLongOrNull()
-            ?: return
+        if (!label.startsWith(SLEEP_LABEL_PREFIX)) return
+        val encoded = label.substring(SLEEP_LABEL_PREFIX.length)
+        val parts = encoded.split(SLEEP_LABEL_SEPARATOR)
+        if (parts.size != 2) return
+        val token = parts[0].toLongOrNull() ?: return
         if (sleepDeadlines.containsKey(token)) {
             sleepOperationTokens[operationId] = token
         }
@@ -1966,6 +1977,7 @@ internal class LuaEngineRuntime(
             "startup",
             "handle_lifecycle",
             "handle_readiness",
+            "handle_capture_lifecycle",
             "handle_input",
             "handle_sos",
         )
@@ -1980,6 +1992,7 @@ internal class LuaEngineRuntime(
         /** NUL-prefixed operation-protocol marker a trusted yield must carry. */
         private const val OPERATION_YIELD_PREFIX = "\u0000talkcan-operation:"
         private const val SLEEP_LABEL_PREFIX = "sleep:"
+        private const val SLEEP_LABEL_SEPARATOR = ":"
         private val NEXT_SLEEP_TOKEN = AtomicLong(1L)
 
         /** Trusted dispatch envelope kinds. */
@@ -2033,6 +2046,7 @@ internal class LuaEngineRuntime(
                     context == SchedulerContext.MANAGED ||
                     context == SchedulerContext.RESOLVER
             HostOperationKind.WORK_RECEIVE -> context == SchedulerContext.MANAGED
+            HostOperationKind.AUDIO_FEEDBACK -> context == SchedulerContext.MANAGED
             else ->
                 context == SchedulerContext.INPUT || context == SchedulerContext.MANAGED
         }
@@ -2061,6 +2075,7 @@ internal class LuaEngineRuntime(
             HostOperationKind.TRANSCRIBE,
             HostOperationKind.SYNTHESIZE,
             HostOperationKind.PLAYBACK,
+            HostOperationKind.AUDIO_FEEDBACK,
             -> true
         }
         if (!declared) return "E_CAPABILITY_UNDECLARED"
@@ -2176,6 +2191,7 @@ private data class OpaqueJob(
 internal enum class SchedulerContext {
     STARTUP,
     INPUT,
+    CAPTURE_LIFECYCLE,
     MANAGED,
     SOS,
     RESOLVER,

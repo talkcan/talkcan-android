@@ -255,6 +255,7 @@ internal enum class HostOperationKind {
     SECRET_READ, HTTP_REQUEST,
     WORK_SUBMIT, WORK_RECEIVE, WORK_BEGIN_EFFECT, WORK_COMMIT_EFFECT,
     WORK_COMPLETE, WORK_FAIL,
+    AUDIO_FEEDBACK,
 }
 
 /**
@@ -273,6 +274,7 @@ internal sealed interface HostOperationClaim {
         val voice: String?,
         val speed: Double,
         val delaySeconds: Double,
+        val feedbackTone: io.talkcan.service.CaptureFeedbackTone? = null,
         // Filesystem payload fields (present only for FS_* kinds).
         val declarationId: String? = null,
         val mountToken: String? = null,

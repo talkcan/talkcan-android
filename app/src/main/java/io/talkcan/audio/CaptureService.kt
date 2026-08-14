@@ -139,7 +139,7 @@ sealed interface CaptureStartResult {
 sealed interface CaptureCompletion {
     val recordedPcm: RecordedPcm
 
-    /** The session reached the 60-second maximum capture duration. */
+    /** The session reached the maximum capture duration. */
     data class MaxDuration(override val recordedPcm: RecordedPcm) : CaptureCompletion
 
     /** [CaptureSession.stop] was called. */
@@ -155,7 +155,7 @@ sealed interface CaptureCompletion {
  * Exposes both:
  *  - [frames]: a hot stream of PCM chunks as read from the loop, for live
  *    consumers (level meter, journal WAV writer, future streaming channels).
- *  - [stop]: returns the complete buffered capture (up to 60s), for
+     *  - [stop]: returns the complete buffered capture (up to maxDurationMs), for
  *    consumers that operate on the whole capture (echo playback, STT).
  */
 interface CaptureSession {
@@ -177,6 +177,13 @@ interface CaptureSession {
      * 16 kHz depending on the route.
      */
     val sampleRate: Int
+
+    /** The maximum capture duration configured for this session. */
+    val maxDurationMs: Long
+
+    val remainingDurationMs: Long
+
+    val semanticFeedbackEmitter: SemanticFeedbackEmitter
 
     /**
      * Stop the session (if still running) and return the captured PCM.
@@ -200,8 +207,6 @@ interface CaptureSession {
 class CaptureService(
     private val scope: CoroutineScope,
     private val readDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val maxDurationMs: Long = DEFAULT_MAX_DURATION_MS,
-    private val maxBufferSamplesFactor: Int = DEFAULT_BUFFER_FACTOR,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _isCapturing = MutableStateFlow(false)
@@ -229,6 +234,7 @@ class CaptureService(
         source: CaptureSource,
         sco: ScoRoute,
         output: PcmOutput,
+        maxDurationMs: Long,
         shouldProceed: () -> Boolean,
     ): CaptureStartResult = mutex.withLock {
         if (active != null) return@withLock CaptureStartResult.SessionActive
@@ -366,7 +372,6 @@ class CaptureService(
                 coldStart = sco.coldStart,
                 readDispatcher = readDispatcher,
                 maxDurationMs = maxDurationMs,
-                maxBufferSamplesFactor = maxBufferSamplesFactor,
                 clock = clock,
                 onCaptureSignalChange = { capturing ->
                     if (!capturing) {
@@ -375,15 +380,10 @@ class CaptureService(
                     _isCapturing.value = capturing
                 },
                 onLevelUpdate = { rms -> _level.value = rms },
-                // Synchronous finalize hook: clears the service's `active`
-                // reference inside `finalizeLock` so a rapid re-press after
-                // `stop()` / `cancelSession()` is never rejected as
-                // `SessionActive`. The identity check (`active === session`)
-                // is performed inside `finalize()` so this lambda is safe to
-                // call even after a new session has taken `active`.
                 onFinalize = { finalizedSession ->
                     if (active === finalizedSession) active = null
                 },
+                pcmOutput = output,
             )
             opened = null // ownership transferred
             routeAcquired = false // route lifecycle remains with the caller
@@ -433,7 +433,5 @@ class CaptureService(
         /** Maximum capture duration per session (spec: Maximum capture duration). */
         const val DEFAULT_MAX_DURATION_MS: Long = 60_000L
 
-        /** Buffer cap factor (seconds worth of samples retained for terminal `stop()`). */
-        const val DEFAULT_BUFFER_FACTOR: Int = 60
     }
 }

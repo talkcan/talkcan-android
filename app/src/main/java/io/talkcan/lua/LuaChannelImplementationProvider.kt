@@ -90,7 +90,7 @@ internal class LuaChannelImplementationProvider private constructor(
 
     companion object {
         private val RECOGNIZED_CALLBACKS = setOf(
-            "startup", "handle_lifecycle", "handle_input", "handle_sos", "handle_readiness",
+            "startup", "handle_lifecycle", "handle_input", "handle_sos", "handle_readiness", "handle_capture_lifecycle",
         )
 
         fun create(

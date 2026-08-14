@@ -507,7 +507,7 @@ class ServiceProfileWorkRecoveryTest {
             callbackHandle: LuaCallbackHandle,
             config: LuaValue,
             spawnAdmission: LuaSpawnAdmission,
-        ): LuaKernelOutcome = completed(handle)
+        ): LuaKernelOutcome = completed(handle, "{\"input\":{\"max_duration_ms\":60000}}")
 
         override fun invokeCallback(
             handle: LuaStateHandle,

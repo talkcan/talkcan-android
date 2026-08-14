@@ -7,6 +7,7 @@ import io.talkcan.audio.ChannelAudioInputSession
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.ChannelInputTarget
+import io.talkcan.audio.CapturePolicy
 import io.talkcan.audio.CaptureSourceId
 import io.talkcan.audio.OpenedCaptureSource
 import io.talkcan.audio.PcmOutput
@@ -291,7 +292,8 @@ class PttAudioSessionManagerTest {
         val terminalRecordings = mutableListOf<RecordedPcm>()
         var cancellationCount = 0
         val target = object : ChannelInputTarget {
-            override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+            override val capturePolicy = CapturePolicy(60_000L)
+            override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
             override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                 terminalRecordings += recording
@@ -299,11 +301,11 @@ class PttAudioSessionManagerTest {
                 return ChannelInputResult.None
             }
 
-            override fun onInputCancelled(reason: String) {
+            override suspend fun onInputCancelled(reason: String) {
                 cancellationCount += 1
             }
 
-            override fun onInputFailed(reason: String) = Unit
+            override suspend fun onInputFailed(reason: String) = Unit
         }
         fixture.router.acceptance = ChannelInputAcceptance.Accepted(target)
 
@@ -470,7 +472,7 @@ class PttAudioSessionManagerTest {
         assertTrue(fixture.manager.start(PttSource.Rsm, "echo", InputMode.Work))
         runCurrent()
         fixture.manager.release(PttSource.Phone)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(PttSource.Rsm, fixture.manager.activeSession?.source)
         assertEquals(0, route.output.releaseRouteCount)
@@ -495,7 +497,7 @@ class PttAudioSessionManagerTest {
         assertTrue(fixture.manager.start(PttSource.Phone, "echo", InputMode.OnAPinch))
         runCurrent()
         fixture.manager.release(PttSource.Rsm)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(PttSource.Phone, fixture.manager.activeSession?.source)
         assertEquals(0, newRoute.output.releaseRouteCount)
@@ -617,7 +619,7 @@ class PttAudioSessionManagerTest {
         assertTrue(source.openStarted.isCompleted)
 
         source.allowOpen.complete(Unit)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("started"), fixture.router.events)
         assertEquals(1, source.openCount)
@@ -653,7 +655,7 @@ class PttAudioSessionManagerTest {
         assertEquals(1, fixture.router.prepareCallCount)
 
         fixture.router.preparationGate?.complete(Unit)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(
             listOf("prepare:keyboard", "ready:Car", "started:keyboard"),
@@ -797,7 +799,7 @@ class PttAudioSessionManagerTest {
         val route = fixture.route(InputMode.OnTheRoad)
 
         assertTrue(fixture.manager.start(PttSource.CarTelecom, "journal", InputMode.OnTheRoad))
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(
             listOf("prepare:journal", "ready:Car", "started:journal"),
@@ -815,7 +817,8 @@ class PttAudioSessionManagerTest {
         val fixture = Fixture(this)
         val targetEvents = mutableListOf<String>()
         val originalTarget = object : ChannelInputTarget {
-            override fun onInputStarted(session: ChannelAudioInputSession) {
+            override val capturePolicy = CapturePolicy(60_000L)
+            override suspend fun onInputStarted(session: ChannelAudioInputSession) {
                 targetEvents += "original-started"
             }
 
@@ -824,16 +827,17 @@ class PttAudioSessionManagerTest {
                 return ChannelInputResult.None
             }
 
-            override fun onInputCancelled(reason: String) {
+            override suspend fun onInputCancelled(reason: String) {
                 targetEvents += "original-cancelled"
             }
 
-            override fun onInputFailed(reason: String) {
+            override suspend fun onInputFailed(reason: String) {
                 targetEvents += "original-failed"
             }
         }
         val replacementTarget = object : ChannelInputTarget {
-            override fun onInputStarted(session: ChannelAudioInputSession) {
+            override val capturePolicy = CapturePolicy(60_000L)
+            override suspend fun onInputStarted(session: ChannelAudioInputSession) {
                 targetEvents += "replacement-started"
             }
 
@@ -842,11 +846,11 @@ class PttAudioSessionManagerTest {
                 return ChannelInputResult.None
             }
 
-            override fun onInputCancelled(reason: String) {
+            override suspend fun onInputCancelled(reason: String) {
                 targetEvents += "replacement-cancelled"
             }
 
-            override fun onInputFailed(reason: String) {
+            override suspend fun onInputFailed(reason: String) {
                 targetEvents += "replacement-failed"
             }
         }
@@ -951,7 +955,7 @@ class PttAudioSessionManagerTest {
 
         workReleased = true
         assertTrue(fixture.manager.start(PttSource.CarTelecom, "echo", InputMode.OnTheRoad))
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(
             listOf(
@@ -1006,7 +1010,8 @@ class PttAudioSessionManagerTest {
             awaitTelecomDisconnected = { events += "disconnect-wait" },
         )
         val target = object : ChannelInputTarget {
-            override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+            override val capturePolicy = CapturePolicy(60_000L)
+            override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
             override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                 events += "channel-release"
@@ -1017,11 +1022,11 @@ class PttAudioSessionManagerTest {
                 events += "channel-playback-complete"
             }
 
-            override fun onInputCancelled(reason: String) {
+            override suspend fun onInputCancelled(reason: String) {
                 events += "channel-cancelled"
             }
 
-            override fun onInputFailed(reason: String) {
+            override suspend fun onInputFailed(reason: String) {
                 events += "channel-failed"
             }
         }
@@ -1244,6 +1249,37 @@ class PttAudioSessionManagerTest {
     }
 
     @Test
+    fun maxDurationCompletionClaimsNormalReleaseWithoutPttRelease() = runTest {
+        val events = mutableListOf<String>()
+        val target = TerminalTarget(events)
+        val capture = TerminalCaptureSession(events)
+        val fixture = TerminalFixture(
+            scope = this,
+            target = target,
+            capture = capture,
+            output = TerminalOutput(events),
+            events = events,
+        )
+
+        assertTrue(fixture.manager.start(PttSource.Phone, "journal", InputMode.OnAPinch))
+        runCurrent()
+        events.clear()
+
+        capture.completion.complete(
+            CaptureCompletion.MaxDuration(RecordedPcm(shortArrayOf(7, 8), 16_000)),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("capture-stop", "target-release", "route-release", "lease-release", "completion"),
+            events,
+        )
+        assertEquals(1, target.releaseCount)
+        assertEquals(null, fixture.manager.activeSession)
+        assertTrue(fixture.completions.single().failures.isEmpty())
+    }
+
+    @Test
     fun terminalCleanupSurvivesCallerScopeCancellation() = runTest {
         val events = mutableListOf<String>()
         val serviceJob = SupervisorJob()
@@ -1278,7 +1314,8 @@ class PttAudioSessionManagerTest {
     fun slowInputReleaseReturnsItsEffectBeforeRouteLeaseAndCompletionCleanup() = runTest {
         val events = mutableListOf<String>()
         val target = object : ChannelInputTarget, CommittedTargetLeaseOwner {
-            override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+            override val capturePolicy = CapturePolicy(60_000L)
+            override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
             override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                 events += "target-release-started"
@@ -1287,9 +1324,9 @@ class PttAudioSessionManagerTest {
                 return ChannelInputResult.None
             }
 
-            override fun onInputCancelled(reason: String) = Unit
+            override suspend fun onInputCancelled(reason: String) = Unit
 
-            override fun onInputFailed(reason: String) = Unit
+            override suspend fun onInputFailed(reason: String) = Unit
 
             override suspend fun releaseCommittedTargetLease() {
                 events += "lease-release"
@@ -1493,7 +1530,8 @@ class PttAudioSessionManagerTest {
         private inner class RecordingTarget(
             private val channelId: String,
         ) : ChannelInputTarget {
-            override fun onInputStarted(session: ChannelAudioInputSession) {
+            override val capturePolicy = CapturePolicy(60_000L)
+            override suspend fun onInputStarted(session: ChannelAudioInputSession) {
                 events += event("started", channelId)
                 timeline += "started:$channelId"
                 startedSampleRates += session.sampleRate
@@ -1511,13 +1549,13 @@ class PttAudioSessionManagerTest {
                 return ChannelInputResult.None
             }
 
-            override fun onInputCancelled(reason: String) {
+            override suspend fun onInputCancelled(reason: String) {
                 events += event("cancelled:$reason", channelId)
                 liveJobs.forEach { it.cancel() }
                 liveJobs.clear()
             }
 
-            override fun onInputFailed(reason: String) {
+            override suspend fun onInputFailed(reason: String) {
                 events += event("failed:$reason", channelId)
                 liveJobs.forEach { it.cancel() }
                 liveJobs.clear()
@@ -1591,6 +1629,9 @@ class PttAudioSessionManagerTest {
             timeline += "problem:$endpoint"
         }
         override suspend fun play(recording: RecordedPcm) = Unit
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+            timeline += "feedback:$tone:$endpoint"
+        }
         override suspend fun releaseRoute() {
             releaseRouteCount += 1
         }
@@ -1616,6 +1657,7 @@ class PttAudioSessionManagerTest {
                     source = any(),
                     sco = any(),
                     output = any(),
+                    maxDurationMs = any(),
                     shouldProceed = any(),
                 )
             } returns CaptureStartResult.Started(capture, CaptureStartupEvidence())
@@ -1659,9 +1701,13 @@ class PttAudioSessionManagerTest {
         override val frames = MutableSharedFlow<ShortArray>()
         override val completion = CompletableDeferred<CaptureCompletion>()
         override val sampleRate: Int = 16_000
+        override val maxDurationMs: Long = 60_000L
+        override val remainingDurationMs: Long = 60_000L
+        override val semanticFeedbackEmitter: io.talkcan.audio.SemanticFeedbackEmitter = object : io.talkcan.audio.SemanticFeedbackEmitter {
+            override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+        }
         var stopCount = 0
             private set
-
         override suspend fun stop(): RecordedPcm {
             stopCount += 1
             events += "capture-stop"
@@ -1680,6 +1726,7 @@ class PttAudioSessionManagerTest {
         private val playbackCompletionFailure: Throwable? = null,
         private val leaseFailure: Throwable? = null,
     ) : ChannelInputTarget, CommittedTargetLeaseOwner {
+        override val capturePolicy = CapturePolicy(60_000L)
         var releaseCount = 0
             private set
         var cancelCount = 0
@@ -1691,7 +1738,7 @@ class PttAudioSessionManagerTest {
         var leaseReleaseCount = 0
             private set
 
-        override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+        override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
         override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
             releaseCount += 1
@@ -1707,12 +1754,12 @@ class PttAudioSessionManagerTest {
             playbackCompletionFailure?.let { throw it }
         }
 
-        override fun onInputCancelled(reason: String) {
+        override suspend fun onInputCancelled(reason: String) {
             cancelCount += 1
             events += "target-cancelled"
         }
 
-        override fun onInputFailed(reason: String) {
+        override suspend fun onInputFailed(reason: String) {
             failureCount += 1
             events += "target-failed"
         }
@@ -1737,6 +1784,9 @@ class PttAudioSessionManagerTest {
         override suspend fun play(recording: RecordedPcm) {
             events += "playback"
             played += recording
+        }
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+            events += "feedback:$tone"
         }
         override suspend fun releaseRoute() {
             releaseCount += 1

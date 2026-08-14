@@ -1,6 +1,7 @@
 package io.talkcan.dependency
 
 import io.talkcan.audio.ChannelAudioInputSession
+import io.talkcan.audio.SemanticFeedbackEmitter
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.RecordedPcm
@@ -652,6 +653,11 @@ class ExternalDiagnosticsChannelRuntimeContractTest {
 
     private data class FakeInputSession(override val sampleRate: Int) : ChannelAudioInputSession {
         override val frames = emptyFlow<ShortArray>()
+        override val maxDurationMs = 60_000L
+        override val remainingDurationMs = 60_000L
+        override val semanticFeedbackEmitter = object : SemanticFeedbackEmitter {
+            override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+        }
     }
 
     /**
@@ -740,7 +746,7 @@ class ExternalDiagnosticsChannelRuntimeContractTest {
                 startupAdmissionResults += result
                 if (result == 0) admitted += coroutineId
             }
-            return completed(handle, spawnedCoroutines = admitted)
+            return completed(handle, value = "{\"input\":{\"max_duration_ms\":60000}}", spawnedCoroutines = admitted)
         }
 
         override fun invokeCallback(

@@ -92,3 +92,9 @@ enum class HostPlaybackKind {
     OPERATIONAL,
     PREVIEW,
 }
+
+/** Tones emitted by the host for recording limits or session feedback. */
+enum class CaptureFeedbackTone {
+    RecordingLimitWarning,
+    RecordingLimitFinal,
+}

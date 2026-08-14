@@ -251,6 +251,7 @@ internal class LuaEngineState(
                     when (command.callbackName) {
                         "startup" -> SchedulerContext.STARTUP
                         "handle_input" -> SchedulerContext.INPUT
+                        "handle_capture_lifecycle" -> SchedulerContext.CAPTURE_LIFECYCLE
                         "handle_sos" -> SchedulerContext.SOS
                         else -> SchedulerContext.OTHER
                     },

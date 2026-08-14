@@ -3,7 +3,9 @@ package io.talkcan.service
 import io.talkcan.service.TalkcanLogger as Log
 import io.talkcan.audio.AudioRouteEndpoint
 import io.talkcan.audio.CaptureChannelAudioInputSession
+import io.talkcan.audio.CapturePolicy
 import io.talkcan.audio.CaptureService
+import io.talkcan.audio.CaptureCompletion
 import io.talkcan.audio.CaptureSession
 import io.talkcan.audio.CaptureStartResult
 import io.talkcan.audio.ChannelInputAcceptance
@@ -20,6 +22,7 @@ import io.talkcan.model.PttSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -287,6 +290,7 @@ internal class PttAudioSessionManager(
                 source = route.source,
                 sco = route.sco,
                 output = route.output,
+                maxDurationMs = target.capturePolicy.maxDurationMs,
                 shouldProceed = { isOpen(session) },
             )
             when (result) {
@@ -304,6 +308,7 @@ internal class PttAudioSessionManager(
                     Attachment.Open -> {
                         try {
                             target.onInputStarted(CaptureChannelAudioInputSession(result.session))
+                            monitorCaptureCompletion(session, result.session)
                         } catch (error: Throwable) {
                             requestTerminal(
                                 session,
@@ -327,6 +332,35 @@ internal class PttAudioSessionManager(
                 playProblemFeedback = true,
             )
         }
+    }
+
+    private fun monitorCaptureCompletion(
+        session: ActiveSession,
+        capture: CaptureSession,
+    ) {
+        val monitor = scope.launch(start = CoroutineStart.LAZY) {
+            val completion = try {
+                capture.completion.await()
+            } catch (_: CancellationException) {
+                return@launch
+            }
+            if (completion is CaptureCompletion.MaxDuration) {
+                requestTerminal(
+                    session,
+                    TerminalClaim.NormalRelease,
+                    "Maximum duration reached",
+                )
+            }
+        }
+        val shouldStart = synchronized(lock) {
+            if (active !== session || session.terminalClaim != TerminalClaim.None) {
+                false
+            } else {
+                session.captureCompletionJob = monitor
+                true
+            }
+        }
+        if (shouldStart) monitor.start() else monitor.cancel()
     }
 
     private fun requestTerminal(
@@ -400,6 +434,10 @@ internal class PttAudioSessionManager(
     }
 
     private suspend fun terminateCapture(session: ActiveSession): CaptureTermination {
+        val completionMonitor = synchronized(lock) {
+            session.captureCompletionJob.also { session.captureCompletionJob = null }
+        }
+        completionMonitor?.cancelAndJoin()
         val capture = synchronized(lock) {
             if (session.captureTerminationAttempted) return CaptureTermination.None
             session.captureTerminationAttempted = true
@@ -677,6 +715,7 @@ internal class PttAudioSessionManager(
         var channelTarget: ChannelInputTarget? = null,
         var route: ResolvedAudioRoute? = null,
         var captureSession: CaptureSession? = null,
+        var captureCompletionJob: Job? = null,
         var setupJob: Job? = null,
         var pttDown: Boolean = true,
         var terminalClaim: TerminalClaim = TerminalClaim.None,

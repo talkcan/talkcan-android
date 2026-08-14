@@ -1,6 +1,7 @@
 package io.talkcan.audio
 
 import android.media.AudioAttributes
+import io.talkcan.service.CaptureFeedbackTone
 import android.media.AudioFormat
 import android.media.AudioTrack
 import io.talkcan.model.ScoState
@@ -23,6 +24,31 @@ class NoopScoRoute : ScoRoute {
     override suspend fun acquire(): Boolean = true
     override fun isActive(): Boolean = true
     override fun release() {}
+}
+
+object CaptureFeedbackToneGenerator {
+    fun generateSinePcm16(
+        frequencyHz: Double,
+        durationMs: Int,
+        sampleRate: Int,
+        amplitude: Double,
+    ): ShortArray {
+        val count = sampleRate * durationMs / 1_000
+        return ShortArray(count) { index ->
+            val phase = 2.0 * Math.PI * frequencyHz * index / sampleRate
+            (kotlin.math.sin(phase) * Short.MAX_VALUE * amplitude).toInt().toShort()
+        }
+    }
+
+    fun generateWarningTones(sampleRate: Int): ShortArray {
+        val singleTone = generateSinePcm16(880.0, 150, sampleRate, 0.35)
+        val silence = ShortArray(sampleRate * 150 / 1_000)
+        return singleTone + silence + singleTone + silence + singleTone
+    }
+
+    fun generateFinalTone(sampleRate: Int): ShortArray {
+        return generateSinePcm16(880.0, 750, sampleRate, 0.35)
+    }
 }
 
 class LocalPcmOutput : PcmOutput {
@@ -79,6 +105,19 @@ class LocalPcmOutput : PcmOutput {
             samples = recording.samples,
             sampleRate = recording.sampleRate,
             contentType = AudioAttributes.CONTENT_TYPE_SPEECH,
+        )
+    }
+
+    override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+        val sampleRate = 16_000
+        val samples = when (tone) {
+            CaptureFeedbackTone.RecordingLimitWarning -> CaptureFeedbackToneGenerator.generateWarningTones(sampleRate)
+            CaptureFeedbackTone.RecordingLimitFinal -> CaptureFeedbackToneGenerator.generateFinalTone(sampleRate)
+        }
+        playStaticPcm(
+            samples = samples,
+            sampleRate = sampleRate,
+            contentType = AudioAttributes.CONTENT_TYPE_SONIFICATION,
         )
     }
 

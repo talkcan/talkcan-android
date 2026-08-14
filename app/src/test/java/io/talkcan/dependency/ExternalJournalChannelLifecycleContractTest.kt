@@ -85,7 +85,7 @@ import org.junit.Test
 /**
  * Tasks 10.2–10.4 (+2.9) for the byte-pinned external Journal package.
  *
- * Every test starts from the exact published v1.1.0 fixture and traverses the
+ * Every test starts from the exact published v2.1.0 fixture and traverses the
  * generic host machinery only — validator → installed store → materializer →
  * provider registry → catalogue → runtime registry, with output trees bound
  * through the generic resource UI (mount selection controller → SAF adapter →
@@ -128,8 +128,8 @@ class ExternalJournalChannelLifecycleContractTest {
             assertEquals("output", outputDeclaration.id)
 
             val registry = runtimeRegistry(providers, JournalCapabilityHost())
-            val instanceA = definition("journal-a", id, "VOICE")
-            val instanceB = definition("journal-b", id, "TRANSCRIPT")
+            val instanceA = definition("journal-a", id, "VOICE", recordingLimitMinutes = 1)
+            val instanceB = definition("journal-b", id, "TRANSCRIPT", recordingLimitMinutes = 10)
             val snapshot = ChannelCatalogueSnapshot(listOf(instanceA, instanceB), instanceA.id)
             registry.reconcile(snapshot)
             advanceUntilIdle()
@@ -172,6 +172,7 @@ class ExternalJournalChannelLifecycleContractTest {
             // The distinct scalar output_mode reached each instance's startup callback.
             assertTrue("VOICE scalar must reach instance A startup", bridge.startupModes.contains("VOICE"))
             assertTrue("TRANSCRIPT scalar must reach instance B startup", bridge.startupModes.contains("TRANSCRIPT"))
+            assertEquals(setOf(60_000L, 600_000L), bridge.startupMaxDurationsMs.toSet())
 
             assertEquals(ChannelRuntimeRegistryShutdownResult.Closed, shutdown(registry))
         }
@@ -197,7 +198,11 @@ class ExternalJournalChannelLifecycleContractTest {
 
             // Scalar-only edit on instance A: a fresh configuration payload, same identity.
             val editedA = instanceA.copy(
-                configPayload = OpaqueJsonObject.fromJsonObject(JSONObject().put("output_mode", "VOICE_AND_TRANSCRIPT")),
+                configPayload = OpaqueJsonObject.fromJsonObject(
+                    JSONObject()
+                        .put("output_mode", "VOICE_AND_TRANSCRIPT")
+                        .put("recording_limit_minutes", 5),
+                ),
             )
             registry.reconcile(ChannelCatalogueSnapshot(listOf(editedA, instanceB), editedA.id))
             advanceUntilIdle()
@@ -388,11 +393,11 @@ class ExternalJournalChannelLifecycleContractTest {
             assertEquals(closedBefore + 1, bridge.closedStates.size)
             assertEquals(ChannelPreparationAvailability.Available, registry.getRuntimeSnapshot(instanceA.id)?.preparation)
 
-            // Explicit rollback restores the exact v1.1.0 revision and retains the binding.
+            // Explicit rollback restores the exact v2.1.0 revision and retains the binding.
             assertEquals(MutationResult.RolledBack(id), success(repo.rollback(sourceRecord().repositoryId)))
             val rolledBack = success(InstalledPackageStore(root).loadIndex()).index.providers.getValue(sourceRecord().repositoryId)
             assertEquals(PACKAGE_VERSION, rolledBack.active.manifest.packageVersion)
-            assertEquals("1.0.2", rolledBack.rollback?.manifest?.packageVersion)
+            assertEquals("2.1.1", rolledBack.rollback?.manifest?.packageVersion)
             val fingerprintRolledBack = (providers.resolve(id) as ChannelProviderResolution.Available).provider.fingerprint
             assertEquals("Rollback must restore the exact original revision", fingerprintBefore, fingerprintRolledBack)
 
@@ -721,15 +726,23 @@ class ExternalJournalChannelLifecycleContractTest {
     private suspend fun shutdown(registry: ChannelRuntimeRegistry): ChannelRuntimeRegistryShutdownResult =
         registry.shutdownAndAwait()
 
-    private fun definition(id: String, implementationId: ChannelImplementationId, outputMode: String) =
-        ChannelDefinition(
-            id = id,
-            name = "Journal $outputMode",
-            implementationId = implementationId,
-            enabled = true,
-            configSchemaVersion = 1,
-            configPayload = OpaqueJsonObject.fromJsonObject(JSONObject().put("output_mode", outputMode)),
-        )
+    private fun definition(
+        id: String,
+        implementationId: ChannelImplementationId,
+        outputMode: String,
+        recordingLimitMinutes: Int = 5,
+    ) = ChannelDefinition(
+        id = id,
+        name = "Journal $outputMode",
+        implementationId = implementationId,
+        enabled = true,
+        configSchemaVersion = 1,
+        configPayload = OpaqueJsonObject.fromJsonObject(
+            JSONObject()
+                .put("output_mode", outputMode)
+                .put("recording_limit_minutes", recordingLimitMinutes),
+        ),
+    )
 
     private fun <T> success(outcome: PackageOutcome<T>): T = when (outcome) {
         is PackageOutcome.Success -> outcome.value
@@ -761,7 +774,7 @@ class ExternalJournalChannelLifecycleContractTest {
      * for update/rollback traversal. Not a published release.
      */
     private fun successorFixture(): ByteArray = repackaged(fixture()) { manifest ->
-        manifest.replace("\"packageVersion\":\"$PACKAGE_VERSION\"", "\"packageVersion\":\"1.0.2\"")
+        manifest.replace("\"packageVersion\":\"$PACKAGE_VERSION\"", "\"packageVersion\":\"2.1.1\"")
     }
 
     /**
@@ -862,7 +875,7 @@ class ExternalJournalChannelLifecycleContractTest {
     private fun successorSourceRecord() = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
         coordinates = GitHubRepositoryCoordinates("talkcan-channels", "journal"),
-        release = GitHubReleaseIdentity("2", "v1.0.1", false),
+        release = GitHubReleaseIdentity("2", "v2.1.1", false),
         asset = GitHubAssetIdentity("2", "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
     )
@@ -870,7 +883,7 @@ class ExternalJournalChannelLifecycleContractTest {
     private fun incompatibleSourceRecord() = PackageSourceRecord(
         repositoryId = GitHubRepositoryIdentity(REPOSITORY_ID),
         coordinates = GitHubRepositoryCoordinates("talkcan-channels", "journal"),
-        release = GitHubReleaseIdentity("3", "v2.0.0", false),
+        release = GitHubReleaseIdentity("3", "v2.1.2", false),
         asset = GitHubAssetIdentity("3", "talkcan-channel.zip"),
         ownerId = OFFICIAL_OWNER_ID,
     )
@@ -882,14 +895,15 @@ class ExternalJournalChannelLifecycleContractTest {
     /**
      * JVM recording bridge for the external Journal package, confined to the
      * native kernel boundary. Tracks created/closed states and the startup
-     * `output_mode` scalar; readiness reports ready when the single mapped
-     * capability (`audio.transcription`) is available.
+     * `output_mode` and `recording_limit_minutes` scalars; readiness reports ready
+     * when the single mapped capability (`audio.transcription`) is available.
      */
     private class JournalKernelBridge : LuaKernelBridge {
         private val nextState = AtomicLong(1)
         val createdStates = mutableListOf<Long>()
         val closedStates = mutableListOf<Long>()
         val startupModes = mutableListOf<String>()
+        val startupMaxDurationsMs = mutableListOf<Long>()
 
         override fun create(config: LuaKernelConfig): LuaKernelOutcome {
             val id = nextState.getAndIncrement()
@@ -937,7 +951,11 @@ class ExternalJournalChannelLifecycleContractTest {
             handle: LuaStateHandle,
             entryPoint: String,
             sourceMap: Map<String, String>,
-        ): LuaKernelOutcome = complete(handle, "[\"startup\",\"handle_readiness\",\"handle_input\"]")
+        ): LuaKernelOutcome =
+            complete(
+                handle,
+                "[\"startup\",\"handle_readiness\",\"handle_capture_lifecycle\",\"handle_input\"]",
+            )
 
         override fun invokeStartupCallback(
             handle: LuaStateHandle,
@@ -945,10 +963,16 @@ class ExternalJournalChannelLifecycleContractTest {
             config: LuaValue,
             spawnAdmission: LuaSpawnAdmission,
         ): LuaKernelOutcome {
-            val mode = (((config as? LuaValue.Map)?.pairs?.get("values") as? LuaValue.Map)
-                ?.pairs?.get("output_mode") as? LuaValue.StringValue)?.value ?: "VOICE_AND_TRANSCRIPT"
+            val values = (config as? LuaValue.Map)?.pairs?.get("values") as? LuaValue.Map
+            val mode = (values?.pairs?.get("output_mode") as? LuaValue.StringValue)?.value
+                ?: "VOICE_AND_TRANSCRIPT"
+            val recordingLimitMinutes =
+                (values?.pairs?.get("recording_limit_minutes") as? LuaValue.Integer)?.value
+                    ?: throw AssertionError("recording_limit_minutes missing from startup")
             startupModes += mode
-            return complete(handle)
+            val maxDurationMs = recordingLimitMinutes * 60_000L
+            startupMaxDurationsMs += maxDurationMs
+            return complete(handle, "{\"input\":{\"max_duration_ms\":$maxDurationMs}}")
         }
 
         override fun invokeCallback(
@@ -1061,12 +1085,12 @@ class ExternalJournalChannelLifecycleContractTest {
     private companion object {
         const val RESOURCE_PATH = "journal-channel/talkcan-channel.zip"
         const val REPOSITORY_ID = "1313912742"
-        const val RELEASE_ID = "360293138"
-        const val ASSET_ID = "491214391"
+        const val RELEASE_ID = "370507991"
+        const val ASSET_ID = "514295711"
         const val OFFICIAL_OWNER_ID = "1224006"
-        const val PACKAGE_VERSION = "2.0.0"
-        const val ARTIFACT_SIZE = 69733
-        const val ARTIFACT_SHA256 = "10cb052c077116d41f2936ea8574165a57d5bb617fb1eee9f7971984b9372c5e"
+        const val PACKAGE_VERSION = "2.1.0"
+        const val ARTIFACT_SIZE = 72602
+        const val ARTIFACT_SHA256 = "01f43ba266eb634766316fd39e97b8e5baa10cbd1db69b249674fd265de0f532"
         const val URI_A = "content://com.android.externalstorage.documents/tree/primary%3AJournalA"
         const val URI_B = "content://com.android.externalstorage.documents/tree/primary%3AJournalB"
         const val URI_C = "content://com.android.externalstorage.documents/tree/primary%3AJournalC"

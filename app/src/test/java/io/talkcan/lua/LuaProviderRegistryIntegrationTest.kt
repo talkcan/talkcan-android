@@ -250,7 +250,12 @@ class LuaProviderRegistryIntegrationTest {
             2,
             bridge.events.count { it.startsWith("coroutine:") },
         )
-        assertEquals(ChannelPreparationAvailability.Available, registry.getRuntimeSnapshot(unselected.id)?.preparation)
+        assertEquals(
+            ChannelPreparationAvailability.Unavailable(
+                ChannelPreparationReason.RuntimeReadiness(),
+            ),
+            registry.getRuntimeSnapshot(unselected.id)?.preparation,
+        )
 
         shutdownClosed(registry)
     }
@@ -882,6 +887,7 @@ class LuaProviderRegistryIntegrationTest {
                     handle,
                     "[\"startup\",\"handle_lifecycle\",\"handle_readiness\",\"handle_input\",\"handle_sos\"]",
                 )
+                "plugin.proactive" -> completed(handle, "[\"startup\"]")
                 else -> completed(handle, "[\"startup\",\"handle_readiness\",\"handle_input\"]")
             }
         }
@@ -897,11 +903,14 @@ class LuaProviderRegistryIntegrationTest {
             callbackNames += callbackHandle.name
             callbackCalls += CallbackCall(callbackHandle.name, config)
             events += "callback:${state.id}:${callbackHandle.name}"
+            val isProactive = scenarios[state.id] == "plugin.proactive"
+            val value = if (isProactive) null else "{\"input\":{\"max_duration_ms\":60000}}"
             return admitSpawned(
                 "startup",
                 completed(
                     handle,
-                    spawnedCoroutines = if (scenarios[state.id] == "plugin.proactive") listOf(state.id * 100L) else null,
+                    value = value,
+                    spawnedCoroutines = if (isProactive) listOf(state.id * 100L) else null,
                 ),
                 spawnAdmission,
             )

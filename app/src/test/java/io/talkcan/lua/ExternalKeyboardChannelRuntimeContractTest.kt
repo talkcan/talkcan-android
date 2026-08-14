@@ -623,7 +623,7 @@ class ExternalKeyboardChannelRuntimeContractTest {
             spawnAdmission: LuaSpawnAdmission,
         ): LuaKernelOutcome {
             startupConfigs += config
-            return completed(handle)
+            return completed(handle, "{\"input\":{\"max_duration_ms\":60000}}")
         }
 
         override fun invokeCallback(

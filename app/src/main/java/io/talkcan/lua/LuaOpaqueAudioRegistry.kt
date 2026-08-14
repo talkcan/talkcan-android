@@ -69,12 +69,12 @@ internal class LuaOpaqueAudioRegistry(
              * production wiring.
              */
             val DEFAULT = Limits(
-                maxBytesPerArtifact = 4L * 1024 * 1024,
-                maxDurationPerArtifactMillis = 60_000L,
+                maxBytesPerArtifact = 19_200_000L,
+                maxDurationPerArtifactMillis = 600_000L,
                 maxTokensPerOwner = 32,
-                maxBytesPerOwner = 8L * 1024 * 1024,
+                maxBytesPerOwner = 32L * 1024 * 1024,
                 maxTokensPerGeneration = 64,
-                maxBytesPerGeneration = 16L * 1024 * 1024,
+                maxBytesPerGeneration = 48L * 1024 * 1024,
             )
         }
     }

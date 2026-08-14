@@ -34,6 +34,9 @@ import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.ChannelInputTarget
 import io.talkcan.audio.RecordedPcm
+import io.talkcan.audio.CapturePolicy
+import io.talkcan.audio.SemanticFeedbackEmitter
+import io.talkcan.service.CaptureFeedbackTone
 import io.talkcan.lua.actor.ActorRuntime
 import io.talkcan.model.ChannelDefinition
 import io.talkcan.model.ActorRuntimeHostContext
@@ -179,12 +182,15 @@ internal class LuaAdapterRuntime(
     private var recordingHost: LuaRecordingHost? = null
     @Volatile
     private var audioFilePort: AudioFilePort? = null
+    @Volatile
+    private var cachedCapturePolicy: CapturePolicy? = null
 
     // Cached platform mount handles keyed by declaration id, revalidated by the
     // port per operation; cleared on close. The host-side mount token is the
     // validation authority — this cache only avoids re-resolving the grant.
     private val mountHandleCache = java.util.concurrent.ConcurrentHashMap<String, io.talkcan.storage.MountHandle>()
 
+    private var activeInputTarget: LuaInputTarget? = null
     private val closed = AtomicBoolean(false)
     private val hostGeneration = requireNotNull(generationContext as? ActorRuntimeHostContext) {
         "Lua adapter requires a host-owned actor runtime context"
@@ -260,6 +266,8 @@ internal class LuaAdapterRuntime(
         const val MAX_LOG_RECORDS = 128
         const val MAX_LOCAL_DIAGNOSTICS = 32
         const val MAX_SLEEP_SECONDS = 86_400.0
+        const val SLEEP_LABEL_PREFIX = "sleep:"
+        const val SLEEP_LABEL_SEPARATOR = ":"
         const val READINESS_REFRESH_INTERVAL_MILLIS = 5_000L
         const val MAX_READINESS_STATUS_BYTES = 256
         const val READINESS_MALFORMED_DIAGNOSTIC = "invalid readiness result"
@@ -268,6 +276,7 @@ internal class LuaAdapterRuntime(
         // Default page size for fs.list when the package omits a bounded limit.
         const val FS_DEFAULT_LIST_LIMIT = 100
         const val FS_DIAGNOSTIC_TAG = "TalkcanStorage"
+        const val CAPTURE_FEEDBACK_DIAGNOSTIC_TAG = "TalkcanFeedback"
         // 5.1: bound on the optional readiness `prepare` capability-ID list.
         const val MAX_READINESS_PREPARE_REQUESTS = 4
         // 4.4/5.4: per-capability host preparation deadline used for the
@@ -310,6 +319,29 @@ internal class LuaAdapterRuntime(
         if (startupOutcome !is CallbackInvocationResult.Success) {
             discardStagedAndClose()
             return ChannelActivationResult.Failed("startup failed: ${startupOutcome.diagnostic()}")
+        }
+        if (callbacks.containsKey("handle_input")) {
+            val startupMap = startupOutcome.value as? LuaValue.Map
+            if (startupMap == null || startupMap.pairs.keys != setOf("input")) {
+                discardStagedAndClose()
+                return ChannelActivationResult.Failed("startup return value must contain exactly 'input' table")
+            }
+            val inputMap = startupMap.pairs["input"] as? LuaValue.Map
+            if (inputMap == null || inputMap.pairs.keys != setOf("max_duration_ms")) {
+                discardStagedAndClose()
+                return ChannelActivationResult.Failed("input table must contain exactly 'max_duration_ms'")
+            }
+            val maxDurationVal = inputMap.pairs["max_duration_ms"] as? LuaValue.Integer
+            if (maxDurationVal == null) {
+                discardStagedAndClose()
+                return ChannelActivationResult.Failed("max_duration_ms must be an integer")
+            }
+            val maxDurationMs = maxDurationVal.value
+            if (maxDurationMs !in 60_000L..600_000L) {
+                discardStagedAndClose()
+                return ChannelActivationResult.Failed("max_duration_ms must be in range 60_000..600_000, got $maxDurationMs")
+            }
+            cachedCapturePolicy = CapturePolicy(maxDurationMs)
         }
 
         callbacks["handle_lifecycle"]?.let { lifecycleHandle ->
@@ -718,6 +750,8 @@ internal class LuaAdapterRuntime(
      * entry occurs.
      */
     override suspend fun close() {
+        activeInputTarget?.revoke()
+        activeInputTarget = null
         if (!closed.compareAndSet(false, true)) return
         readyPublication.complete(false)
         audioFilePort?.close()
@@ -801,6 +835,71 @@ internal class LuaAdapterRuntime(
      * Invoke a callback handle via the bridge. The bridge enforces
      * non-yielding, protected execution, and contract validation.
      */
+    private suspend fun invokeCaptureLifecycleCallbackHandle(
+        handle: LuaCallbackHandle,
+        arguments: LuaValue,
+        captureScopeToken: String?,
+        allowSpawn: Boolean
+    ): CallbackInvocationResult {
+        if (closed.get() || !generationContext.isActive()) {
+            return CallbackInvocationResult.Failure("runtime is closed")
+        }
+        val admission = ScopedSpawnAdmission(captureScopeToken = captureScopeToken, allowSpawn = allowSpawn)
+        val gateOutcome = try {
+            actor.invokeProgramImageCallback(handle, arguments, admission)
+        } catch (error: Throwable) {
+            admission.release(false)
+            return CallbackInvocationResult.Failure("callback bridge failure: ${error.message ?: error::class.simpleName}")
+        }
+        val kernelOutcome = (gateOutcome as? ActorGateResult.Success)?.value
+        TalkcanLogger.d(
+            CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+            "LIFECYCLE_GATE token=${captureScopeToken != null} allowSpawn=$allowSpawn " +
+                "outcome=${kernelOutcome?.let { it::class.simpleName }} " +
+                "spawned=${when (kernelOutcome) {
+                    is LuaKernelOutcome.Completed -> kernelOutcome.spawnedCoroutines
+                    is LuaKernelOutcome.Yielded -> kernelOutcome.spawnedCoroutines
+                    else -> null
+                }}",
+        )
+        when (val release = admission.releaseFor(gateOutcome)) {
+            SpawnAdmissionRelease.Matched -> Unit
+            is SpawnAdmissionRelease.Mismatch -> {
+                return CallbackInvocationResult.Failure(release.diagnostic)
+            }
+        }
+        val outcome = when (gateOutcome) {
+            is ActorGateResult.Success -> gateOutcome.value
+            else -> return CallbackInvocationResult.Failure("callback gate is unavailable")
+        }
+        return when (outcome) {
+            is LuaKernelOutcome.Completed -> consumeCompletedOutcome(outcome)
+            is LuaKernelOutcome.RuntimeFailure -> CallbackInvocationResult.Failure(outcome.diagnostic)
+            is LuaKernelOutcome.Interrupted -> CallbackInvocationResult.Failure(outcome.diagnostic ?: "interrupted")
+            is LuaKernelOutcome.Cancelled -> CallbackInvocationResult.Failure("callback cancelled")
+            is LuaKernelOutcome.ValidationFailure -> CallbackInvocationResult.InvalidOutcome(outcome.diagnostic)
+            is LuaKernelOutcome.InvalidOwnership -> CallbackInvocationResult.Failure(outcome.diagnostic)
+            is LuaKernelOutcome.Stale -> CallbackInvocationResult.YieldViolation("stale generation")
+            is LuaKernelOutcome.Closed -> CallbackInvocationResult.Failure("state is closed")
+            is LuaKernelOutcome.Yielded -> CallbackInvocationResult.YieldViolation(
+                "callback yielded operation ${outcome.operationId}",
+            )
+            else -> CallbackInvocationResult.Failure("unexpected bridge outcome: ${outcome::class.simpleName}")
+        }
+    }
+
+    private suspend fun invokeCaptureLifecycle(arguments: LuaValue, captureScopeToken: String? = null, allowSpawn: Boolean = false) {
+        val handle = callbacks["handle_capture_lifecycle"] ?: return
+        try {
+            val outcome = invokeCaptureLifecycleCallbackHandle(handle, arguments, captureScopeToken, allowSpawn)
+            if (outcome !is CallbackInvocationResult.Success) {
+                recordDiagnostic("handle_capture_lifecycle failed: ${outcome.diagnostic()}")
+            }
+        } catch (e: Exception) {
+            recordDiagnostic("handle_capture_lifecycle failed: ${e.message ?: e::class.simpleName}")
+        }
+    }
+
     private suspend fun invokeCallbackHandle(
         handle: LuaCallbackHandle,
         arguments: LuaValue,
@@ -913,15 +1012,23 @@ internal class LuaAdapterRuntime(
 
     private inner class ScopedSpawnAdmission(
         private val audioOwner: LuaOpaqueAudioRegistry.Owner? = null,
+        val captureScopeToken: String? = null,
+        private val allowSpawn: Boolean = true,
     ) : LuaSpawnAdmission {
         private val pending = mutableListOf<Pair<Long, CompletableDeferred<Boolean>>>()
 
         override fun admitTask(coroutineId: Long): Int {
+            if (!allowSpawn) {
+                return if (generationContext.isActive()) 2 else 1
+            }
             val decision = CompletableDeferred<Boolean>()
             return when (generationContext.admitTask {
-                if (decision.await()) runBackgroundCoroutine(LuaCoroutineId(coroutineId))
+                if (decision.await()) runBackgroundCoroutine(LuaCoroutineId(coroutineId), captureScopeToken)
             }) {
-                is GenerationAdmission.Accepted -> { pending += coroutineId to decision; 0 }
+                is GenerationAdmission.Accepted -> {
+                    pending += coroutineId to decision
+                    0
+                }
                 is GenerationAdmission.Rejected -> if (generationContext.isActive()) 2 else 1
             }
         }
@@ -974,24 +1081,30 @@ internal class LuaAdapterRuntime(
 
     private fun TypedHostCompletion.toHostCompletion(): HostOperationCompletion =
         HostOperationCompletion(success, value)
-    private suspend fun runBackgroundCoroutine(initialCoroutineId: LuaCoroutineId) {
+
+    private suspend fun runBackgroundCoroutine(initialCoroutineId: LuaCoroutineId, captureScopeToken: String?) {
         val audioOwner = LuaOpaqueAudioRegistry.Owner.Task(
             "coroutine-${initialCoroutineId.value}",
         )
         try {
-            runBackgroundCoroutineOwned(initialCoroutineId, audioOwner)
+            runBackgroundCoroutineOwned(initialCoroutineId, audioOwner, captureScopeToken)
         } finally {
             audioRegistry?.invalidateOwner(audioOwner)
         }
     }
 
-    /** Runs one native coroutine without recursion, retaining task capacity while asleep. */
     private suspend fun runBackgroundCoroutineOwned(
         initialCoroutineId: LuaCoroutineId,
         audioOwner: LuaOpaqueAudioRegistry.Owner.Task,
+        captureScopeToken: String?,
     ) {
-        val startAdmission = ScopedSpawnAdmission()
+        val startAdmission = ScopedSpawnAdmission(captureScopeToken = captureScopeToken)
         val startOutcome = actor.startProgramImageCoroutine(initialCoroutineId, startAdmission)
+        TalkcanLogger.d(
+            CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+            "TASK_START coroutine=${initialCoroutineId.value} token=${captureScopeToken != null} " +
+                "gate=${(startOutcome as? ActorGateResult.Success)?.value?.let { it::class.simpleName }}",
+        )
         when (val release = startAdmission.releaseFor(startOutcome)) {
             SpawnAdmissionRelease.Matched -> Unit
             is SpawnAdmissionRelease.Mismatch -> {
@@ -999,7 +1112,7 @@ internal class LuaAdapterRuntime(
                 return
             }
         }
-        driveManagedTaskOutcomes(startOutcome, audioOwner)
+        driveManagedTaskOutcomes(startOutcome, audioOwner, captureScopeToken)
     }
 
     /**
@@ -1012,9 +1125,10 @@ internal class LuaAdapterRuntime(
     private suspend fun driveManagedTaskOutcomes(
         initialGateOutcome: ActorGateResult<LuaKernelOutcome>,
         audioOwner: LuaOpaqueAudioRegistry.Owner.Task,
+        captureScopeToken: String?,
     ) {
         suspend fun resumeSlice(operation: LuaOperationHandle, success: Boolean, value: String): ActorGateResult<LuaKernelOutcome>? {
-            val admission = ScopedSpawnAdmission()
+            val admission = ScopedSpawnAdmission(captureScopeToken = captureScopeToken)
             val result = actor.resumeProgramImageCoroutine(operation, success, value, admission)
             return when (val release = admission.releaseFor(result)) {
                 SpawnAdmissionRelease.Matched -> result
@@ -1101,6 +1215,46 @@ internal class LuaAdapterRuntime(
                                         ?: HostOperationCompletion(false, "E_DENIED")
                                 }
                             }
+                            HostOperationKind.AUDIO_FEEDBACK -> {
+                                val target = activeInputTarget
+                                if (target != null && captureScopeToken != null && captureScopeToken == target.activeToken) {
+                                    val emitter = target.activeEmitter
+                                    val tone = when (claim.feedbackTone) {
+                                        io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning ->
+                                            io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning
+                                        io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal ->
+                                            io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal
+                                        else -> null
+                                    }
+                                    if (emitter != null && tone != null) {
+                                        TalkcanLogger.d(
+                                            CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+                                            "EMIT_BEGIN coroutine=${operation.coroutineId.value} tone=$tone",
+                                        )
+                                        try {
+                                            emitter.emit(tone)
+                                            TalkcanLogger.d(
+                                                CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+                                                "EMIT_SUCCESS coroutine=${operation.coroutineId.value} tone=$tone",
+                                            )
+                                            HostOperationCompletion(true, "{\"ok\":true}")
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (failure: Throwable) {
+                                            TalkcanLogger.w(
+                                                CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+                                                "EMIT_FAILURE coroutine=${operation.coroutineId.value} " +
+                                                    "tone=$tone type=${failure.javaClass.simpleName}",
+                                            )
+                                            HostOperationCompletion(false, "E_HOST_FAILURE")
+                                        }
+                                    } else {
+                                        HostOperationCompletion(false, "E_INVALID_CONTEXT")
+                                    }
+                                } else {
+                                    HostOperationCompletion(false, "E_INVALID_CONTEXT")
+                                }
+                            }
                             else -> {
                                 android.util.Log.w("TalkcanManagedTask",
                                     "UNHANDLED kind=${claim.kind} req=$requestId -> E_UNSUPPORTED")
@@ -1129,6 +1283,13 @@ internal class LuaAdapterRuntime(
                     if (seconds == null) {
                         gateOutcome = resumeSlice(operation, false, "E_INVALID_YIELD") ?: return
                         continue
+                    }
+                    val captureScopedSleep = captureScopeToken != null
+                    if (captureScopedSleep) {
+                        TalkcanLogger.d(
+                            CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+                            "SLEEP_SCHEDULE coroutine=${operation.coroutineId.value} seconds=$seconds",
+                        )
                     }
                     val deadlineMillis = actor.calculateSleepDeadline((seconds * 1_000.0).toLong())
                     if (deadlineMillis == null) {
@@ -1169,6 +1330,13 @@ internal class LuaAdapterRuntime(
                         synchronized(sleepLock) { activeSleepWaits.remove(sleep) }
                         timer.dispose()
                         deadline.dispose()
+                    }
+                    if (captureScopedSleep) {
+                        TalkcanLogger.d(
+                            CAPTURE_FEEDBACK_DIAGNOSTIC_TAG,
+                            "SLEEP_COMPLETE coroutine=${operation.coroutineId.value} " +
+                                "outcome=${if (timerFirst) "timer" else "timeout"}",
+                        )
                     }
                     if (closed.get() || !generationContext.isActive()) return
                     gateOutcome = resumeSlice(operation, timerFirst, if (timerFirst) "" else "E_TIMEOUT") ?: return
@@ -1516,9 +1684,12 @@ internal class LuaAdapterRuntime(
     }
 
     private fun parseSleepSeconds(label: String?): Double? {
-        val encoded = label?.removePrefix("sleep:") ?: return null
-        if (encoded === label) return null
-        return encoded.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 && it <= MAX_SLEEP_SECONDS }
+        if (label == null || !label.startsWith(SLEEP_LABEL_PREFIX)) return null
+        val parts = label.substring(SLEEP_LABEL_PREFIX.length).split(SLEEP_LABEL_SEPARATOR)
+        if (parts.size != 2) return null
+        if (parts[0].toLongOrNull() == null) return null
+        return parts[1].toDoubleOrNull()
+            ?.takeIf { it.isFinite() && it >= 0.0 && it <= MAX_SLEEP_SECONDS }
     }
 
     /** Accepts only native-normalized level/payload records; host owns metadata. */
@@ -1571,6 +1742,7 @@ internal class LuaAdapterRuntime(
     private fun recordDiagnostic(message: String) = synchronized(logLock) {
         if (localDiagnostics.size == MAX_LOCAL_DIAGNOSTICS) localDiagnostics.removeFirst()
         localDiagnostics.addLast(message)
+        TalkcanLogger.w("LuaRuntime", message)
     }
 
     /** Parses normalized native callback output without throwing. */
@@ -1878,16 +2050,61 @@ internal class LuaAdapterRuntime(
     private inner class LuaInputTarget : ChannelInputTarget {
         private val sessionId = UUID.randomUUID().toString()
         private var sampleRate: Int = 0
+        override val capturePolicy: CapturePolicy
+            get() = checkNotNull(cachedCapturePolicy) { "Capture policy was not activated" }
 
-        override fun onInputStarted(session: ChannelAudioInputSession) {
+        var activeToken: String? = null
+            private set
+        var activeEmitter: SemanticFeedbackEmitter? = null
+            private set
+
+        fun revoke() {
+            activeToken = null
+            activeEmitter = null
+        }
+
+        private suspend fun invokeCaptureLifecycle(
+            arguments: LuaValue,
+            captureScopeToken: String? = null,
+            allowSpawn: Boolean = false,
+        ) {
+            this@LuaAdapterRuntime.invokeCaptureLifecycle(arguments, captureScopeToken, allowSpawn)
+        }
+
+
+        override suspend fun onInputStarted(session: ChannelAudioInputSession) {
             if (!closed.get()) {
                 synchronized(inputLock) { inputCancellationRequested = false }
                 sampleRate = session.sampleRate
                 updateSnapshot(executionStatus = ChannelExecutionStatus.RECORDING)
+
+                activeInputTarget = this@LuaInputTarget
+                val token = UUID.randomUUID().toString()
+                activeToken = token
+                activeEmitter = session.semanticFeedbackEmitter
+
+                val payload = LuaValue.Map(
+                    mapOf(
+                        "event" to LuaValue.StringValue("capture_started"),
+                        "session" to LuaValue.StringValue(sessionId),
+                        "max_duration_ms" to LuaValue.Integer(session.maxDurationMs),
+                        "remaining_duration_ms" to LuaValue.Integer(session.remainingDurationMs)
+                    )
+                )
+                invokeCaptureLifecycle(payload, token, allowSpawn = true)
             }
         }
 
         override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
+            revoke()
+            val payload = LuaValue.Map(
+                mapOf(
+                    "event" to LuaValue.StringValue("capture_released"),
+                    "session" to LuaValue.StringValue(sessionId)
+                )
+            )
+            invokeCaptureLifecycle(payload, allowSpawn = false)
+
             if (closed.get()) return ChannelInputResult.None
             val cancelled = synchronized(inputLock) { inputCancellationRequested }
             if (cancelled || recording.isEmpty) {
@@ -2057,14 +2274,33 @@ internal class LuaAdapterRuntime(
 
         override fun onInputPlaybackCompleted() = Unit
 
-        override fun onInputCancelled(reason: String) {
+        override suspend fun onInputCancelled(reason: String) {
+            revoke()
+            val payload = LuaValue.Map(
+                mapOf(
+                    "event" to LuaValue.StringValue("capture_cancelled"),
+                    "session" to LuaValue.StringValue(sessionId),
+                    "reason" to LuaValue.StringValue(reason)
+                )
+            )
+            invokeCaptureLifecycle(payload, allowSpawn = false)
+
             synchronized(inputLock) { inputCancellationRequested = true }
             cancelPendingInput()
             if (!closed.get()) updateSnapshot(executionStatus = ChannelExecutionStatus.IDLE)
         }
 
+        override suspend fun onInputFailed(reason: String) {
+            revoke()
+            val payload = LuaValue.Map(
+                mapOf(
+                    "event" to LuaValue.StringValue("capture_failed"),
+                    "session" to LuaValue.StringValue(sessionId),
+                    "reason" to LuaValue.StringValue(reason)
+                )
+            )
+            invokeCaptureLifecycle(payload, allowSpawn = false)
 
-        override fun onInputFailed(reason: String) {
             if (!closed.get()) updateSnapshot(executionStatus = ChannelExecutionStatus.FAILED)
         }
     }
@@ -2164,6 +2400,7 @@ internal class LuaAdapterRuntime(
                 HostOperationKind.WORK_COMMIT_EFFECT,
                 HostOperationKind.WORK_COMPLETE,
                 HostOperationKind.WORK_FAIL -> executeTypedOperation(pending, claim)
+                HostOperationKind.AUDIO_FEEDBACK -> executeAudioFeedback(pending, claim)
             }
         }
     }
@@ -2526,6 +2763,18 @@ internal class LuaAdapterRuntime(
         resumeInput(pending.ownerToken, pending.operation.operationId.value, success, value, normalizeAudioError = false)
     }
 
+    private suspend fun executeAudioFeedback(
+        pending: PendingInputExecution,
+        claim: HostOperationClaim.Admitted,
+    ) {
+        resumeInput(
+            pending.ownerToken,
+            pending.operation.operationId.value,
+            false,
+            "E_INVALID_CONTEXT",
+            normalizeAudioError = false,
+        )
+    }
     /**
      * 8.4/9.2/12.10: input-path dispatch for typed generic host operations
      * (protected secret reads, HTTPS requests, durable work). The native
@@ -2635,7 +2884,7 @@ internal class LuaAdapterRuntime(
                     return
                 }
             }
-            driveManagedTaskOutcomes(gateOutcome, audioOwner)
+            driveManagedTaskOutcomes(gateOutcome, audioOwner, null)
         } finally {
             audioRegistry?.invalidateOwner(audioOwner)
         }
@@ -2920,6 +3169,7 @@ internal class LuaAdapterRuntime(
             )
         }
     }
+
 }
 
 /** Host-enriched, bounded diagnostic record; plugin payload cannot supply metadata. */

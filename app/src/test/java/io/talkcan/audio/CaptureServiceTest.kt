@@ -1,7 +1,13 @@
 package io.talkcan.audio
 
 import io.talkcan.model.ScoState
+import io.talkcan.service.CaptureFeedbackTone
 import kotlin.coroutines.ContinuationInterceptor
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,10 +33,10 @@ class CaptureServiceTest {
         val service = captureService()
         val source = FakeSource(continuous = true)
 
-        val first = service.startSession(source, FakeScoRoute(), FakeOutput()) { true }
+        val first = service.startSession(source, FakeScoRoute(), FakeOutput(), 60_000L) { true }
         assertTrue(first is CaptureStartResult.Started)
 
-        val second = service.startSession(FakeSource(), FakeScoRoute(), FakeOutput()) { true }
+        val second = service.startSession(FakeSource(), FakeScoRoute(), FakeOutput(), 60_000L) { true }
         assertEquals(CaptureStartResult.SessionActive, second)
 
         (first as CaptureStartResult.Started).session.stop()
@@ -41,14 +47,14 @@ class CaptureServiceTest {
         val service = captureService()
         val source = FakeSource(continuous = true)
 
-        val first = service.startSession(source, FakeScoRoute(), FakeOutput()) { true }
+        val first = service.startSession(source, FakeScoRoute(), FakeOutput(), 60_000L) { true }
         assertTrue(first is CaptureStartResult.Started)
         (first as CaptureStartResult.Started).session.stop()
 
         // The active reference must be cleared synchronously inside stop() so
         // a rapid PTT re-press — with no coroutine pump between release and
         // the next press — is accepted instead of rejected as SessionActive.
-        val second = service.startSession(FakeSource(continuous = true), FakeScoRoute(), FakeOutput()) { true }
+        val second = service.startSession(FakeSource(continuous = true), FakeScoRoute(), FakeOutput(), 60_000L) { true }
         assertTrue(
             "expected second start to be accepted immediately after stop, got $second",
             second is CaptureStartResult.Started,
@@ -64,7 +70,7 @@ class CaptureServiceTest {
             sourceId = CaptureSourceId.VoiceCommunication,
         )
 
-        val result = service.startSession(source, FakeScoRoute(), FakeOutput()) { true }
+        val result = service.startSession(source, FakeScoRoute(), FakeOutput(), 60_000L) { true }
 
         assertTrue(result is CaptureStartResult.Started)
         assertEquals(1, source.openCount)
@@ -137,12 +143,12 @@ class CaptureServiceTest {
 
     @Test
     fun sessionEndsAtMaxDurationCapWithCapturedPcm() = runTest {
-        val service = captureService(maxDurationMs = MAX_DURATION_TEST_MS)
+        val service = captureService()
         val source = FakeSource(
             scriptedChunks = listOf(ShortArray(2) { 5 }),
             continuous = true,
         )
-        val session = startedSession(service, source)
+        val session = startedSession(service, source, maxDurationMs = MAX_DURATION_TEST_MS)
 
         advanceTimeBy(MAX_DURATION_TEST_MS + SMALL_TICK_MS)
         runCurrent()
@@ -262,7 +268,7 @@ class CaptureServiceTest {
         val source = FakeSource(continuous = true)
         val sco = FakeScoRoute(scoAvailable = false)
 
-        val result = service.startSession(source, sco, FakeOutput()) { true }
+        val result = service.startSession(source, sco, FakeOutput(), 60_000L) { true }
 
         assertEquals(CaptureStartResult.ScoUnavailable, result)
         assertEquals(0, source.openCount)
@@ -276,7 +282,7 @@ class CaptureServiceTest {
         val sco = FakeScoRoute()
         val output = FakeOutput()
 
-        val result = service.startSession(source, sco, output) { false }
+        val result = service.startSession(source, sco, output, 60_000L) { false }
 
         assertEquals(CaptureStartResult.Cancelled, result)
         assertEquals(0, output.readyBeepCount)
@@ -299,7 +305,7 @@ class CaptureServiceTest {
         // First predicate call (after SCO acquire) returns true → source preflight opens.
         // Second predicate call (after preflight) returns false → no beep, no recording.
         var predicateCalls = 0
-        val result = service.startSession(source, sco, output) {
+        val result = service.startSession(source, sco, output, 60_000L) {
             predicateCalls += 1
             predicateCalls == 1
         }
@@ -321,7 +327,7 @@ class CaptureServiceTest {
         val sco = FakeScoRoute()
         val output = FakeOutput()
 
-        val result = service.startSession(source, sco, output) { true }
+        val result = service.startSession(source, sco, output, 60_000L) { true }
 
         assertEquals(CaptureStartResult.RecordingFailed, result)
         assertEquals(0, output.readyBeepCount)
@@ -338,7 +344,7 @@ class CaptureServiceTest {
         val service = captureService()
         val source = FakeSource(continuous = true)
 
-        val first = service.startSession(source, FakeScoRoute(), FakeOutput()) { true }
+        val first = service.startSession(source, FakeScoRoute(), FakeOutput(), 60_000L) { true }
         assertTrue(first is CaptureStartResult.Started)
         val firstSession = (first as CaptureStartResult.Started).session
 
@@ -351,6 +357,7 @@ class CaptureServiceTest {
             FakeSource(continuous = true),
             FakeScoRoute(),
             FakeOutput(),
+            60_000L,
         ) { true }
         assertTrue(
             "expected rapid re-press after cancelSession to be accepted, got $second",
@@ -360,26 +367,170 @@ class CaptureServiceTest {
     }
 
     @Test
-    fun bufferCapPreventsAccumulationPastConfiguredLimit() = runTest {
+    fun bufferCapPreventsAccumulationPastMaxDurationLimit() = runTest {
         val tinySampleRate = 4
-        val capFactorSeconds = 1
-        val capSamples = tinySampleRate * capFactorSeconds
+        val maxDurationMs = 1000L // 1 second worth -> 4 samples
+        val capSamples = 4
         val scriptedChunkCount = 4
         val scriptedChunkSize = 4
 
-        val service = captureService(maxBufferSamplesFactor = capFactorSeconds)
+        val service = captureService()
         val source = FakeSource(
             sampleRate = tinySampleRate,
             scriptedChunks = List(scriptedChunkCount) { ShortArray(scriptedChunkSize) { 1 } },
             continuous = false,
         )
-        val session = startedSession(service, source)
+        val session = startedSession(service, source, maxDurationMs = maxDurationMs)
 
         advanceTimeBy(LOOP_TICK_MS * scriptedChunkCount + SMALL_TICK_MS)
         runCurrent()
         val pcm = session.stop()
 
         assertEquals(capSamples, pcm.samples.size)
+    }
+
+    @Test
+    fun pcmBeyond60SecondsIsRetained() = runTest {
+        val sampleRate = 16_000
+        val maxDurationMs = 70_000L // 70 seconds
+        val chunkSize = 1600 // 100ms
+        val service = captureService()
+        val chunks = List(650) { index -> ShortArray(chunkSize) { index.toShort() } }
+        val source = FakeSource(
+            sampleRate = sampleRate,
+            scriptedChunks = chunks,
+            continuous = false
+        )
+        val session = startedSession(service, source, maxDurationMs = maxDurationMs)
+
+        advanceTimeBy(LOOP_TICK_MS * 650 + SMALL_TICK_MS)
+        runCurrent()
+
+        val pcm = session.stop()
+        assertEquals(1_040_000, pcm.samples.size)
+        for (i in 0 until 650) {
+            val offset = i * chunkSize
+            for (j in 0 until chunkSize) {
+                assertEquals(i.toShort(), pcm.samples[offset + j])
+            }
+        }
+    }
+
+    @Test
+    fun exactMaxDurationCompletion() = runTest {
+        val sampleRate = 16_000
+        val maxDurationMs = 1000L // 1 second -> exactly 16,000 samples
+        val maxSamples = 16_000
+        val service = captureService()
+        val chunks = List(11) { index -> ShortArray(1600) { (index + 1).toShort() } }
+        val source = FakeSource(
+            sampleRate = sampleRate,
+            scriptedChunks = chunks,
+            continuous = false
+        )
+        val session = startedSession(service, source, maxDurationMs = maxDurationMs)
+
+        advanceTimeBy(1000L + SMALL_TICK_MS)
+        runCurrent()
+
+        val completion = session.completion.await()
+        assertTrue("expected MaxDuration, got $completion", completion is CaptureCompletion.MaxDuration)
+        val pcm = completion.recordedPcm
+        assertEquals(maxSamples, pcm.samples.size)
+
+        for (i in 0 until 10) {
+            val offset = i * 1600
+            for (j in 0 until 1600) {
+                assertEquals((i + 1).toShort(), pcm.samples[offset + j])
+            }
+        }
+    }
+
+    @Test
+    fun flattenOrderIsCorrect() = runTest {
+        val sampleRate = 16_000
+        val maxDurationMs = 5000L
+        val service = captureService()
+        val chunks = listOf(
+            shortArrayOf(1, 2, 3, 4),
+            shortArrayOf(5, 6),
+            shortArrayOf(7, 8, 9)
+        )
+        val source = FakeSource(
+            sampleRate = sampleRate,
+            scriptedChunks = chunks,
+            continuous = false
+        )
+        val session = startedSession(service, source, maxDurationMs = maxDurationMs)
+
+        advanceTimeBy(LOOP_TICK_MS * chunks.size + SMALL_TICK_MS)
+        runCurrent()
+
+        val pcm = session.stop()
+        val expected = shortArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        org.junit.Assert.assertArrayEquals(expected, pcm.samples)
+    }
+
+    @Test
+    fun boundaryOverflowBehavior() = runTest {
+        val opened = object : OpenedCaptureSource {
+            override val sampleRate: Int = 16_000
+            override val bufferSizeShorts: Int = 1024
+            override val startupEvidence: CaptureStartupEvidence = CaptureStartupEvidence()
+            override fun readNonBlocking(buffer: ShortArray): Int = 0
+            override fun read(buffer: ShortArray): Int = 0
+            override fun close() {}
+        }
+
+        val validSession = CaptureSessionImpl(
+            scope = this,
+            opened = opened,
+            coldStart = false,
+            readDispatcher = testDispatcher(this),
+            maxDurationMs = 60_000L,
+            clock = { 0L },
+            onCaptureSignalChange = {},
+            onLevelUpdate = {},
+            onFinalize = {},
+            pcmOutput = FakeOutput(),
+        )
+        validSession.cancel()
+
+        try {
+            CaptureSessionImpl(
+                scope = this,
+                opened = opened,
+                coldStart = false,
+                readDispatcher = testDispatcher(this),
+                maxDurationMs = -1L,
+                clock = { 0L },
+                onCaptureSignalChange = {},
+                onLevelUpdate = {},
+                onFinalize = {},
+                pcmOutput = FakeOutput(),
+            )
+            org.junit.Assert.fail("expected IllegalArgumentException for negative duration")
+        } catch (e: IllegalArgumentException) {
+            // expected
+        }
+
+        try {
+            CaptureSessionImpl(
+                scope = this,
+                opened = opened,
+                coldStart = false,
+                readDispatcher = testDispatcher(this),
+                maxDurationMs = Long.MAX_VALUE,
+                clock = { 0L },
+                onCaptureSignalChange = {},
+                onLevelUpdate = {},
+                onFinalize = {},
+                pcmOutput = FakeOutput(),
+            )
+            org.junit.Assert.fail("expected IllegalArgumentException for overflow duration")
+        } catch (e: IllegalArgumentException) {
+            // expected
+        }
     }
 
     @Test
@@ -423,7 +574,7 @@ class CaptureServiceTest {
             ),
         )
 
-        val result = service.startSession(source, FakeScoRoute(), FakeOutput()) { true }
+        val result = service.startSession(source, FakeScoRoute(), FakeOutput(), 60_000L) { true }
 
         assertTrue(result is CaptureStartResult.Started)
         val started = result as CaptureStartResult.Started
@@ -446,7 +597,7 @@ class CaptureServiceTest {
         val sco = FakeScoRoute()
         val output = FakeOutput()
 
-        val result = service.startSession(source, sco, output) { true }
+        val result = service.startSession(source, sco, output, 60_000L) { true }
 
         assertEquals(CaptureStartResult.RecordingFailed, result)
         assertEquals(1, source.preBeepChunksRead)
@@ -469,7 +620,7 @@ class CaptureServiceTest {
         )
         val output = FakeOutput(onReadyBeep = source::markBeepComplete)
 
-        val result = service.startSession(source, FakeScoRoute(), output) { true }
+        val result = service.startSession(source, FakeScoRoute(), output, 60_000L) { true }
 
         assertTrue("expected Started after a nonzero pre-commit sample, got $result", result is CaptureStartResult.Started)
         assertEquals(2, source.preBeepChunksRead)
@@ -502,7 +653,7 @@ class CaptureServiceTest {
         val sco = FakeScoRoute()
         val output = FakeOutput(onReadyBeep = source::markBeepComplete)
 
-        val result = service.startSession(source, sco, output) { true }
+        val result = service.startSession(source, sco, output, 60_000L) { true }
 
         assertTrue("expected second recorder to start, got $result", result is CaptureStartResult.Started)
         assertEquals(listOf("open-1", "close-1", "open-2"), source.lifecycleHistory)
@@ -531,7 +682,7 @@ class CaptureServiceTest {
         val sco = FakeScoRoute()
         val output = FakeOutput()
 
-        val result = service.startSession(source, sco, output) { true }
+        val result = service.startSession(source, sco, output, 60_000L) { true }
 
         assertEquals(CaptureStartResult.RecordingFailed, result)
         assertEquals(listOf("open-1", "close-1", "open-2", "close-2"), source.lifecycleHistory)
@@ -557,7 +708,7 @@ class CaptureServiceTest {
         var shouldProceed = true
 
         launch {
-            start.complete(service.startSession(source, sco, output) { shouldProceed })
+            start.complete(service.startSession(source, sco, output, 60_000L) { shouldProceed })
         }
         runCurrent()
         advanceTimeBy(PRE_COMMIT_SIGNAL_TIMEOUT_MS)
@@ -593,7 +744,7 @@ class CaptureServiceTest {
         var released = false
 
         launch {
-            start.complete(service.startSession(source, sco, output) { !released })
+            start.complete(service.startSession(source, sco, output, 60_000L) { !released })
         }
         source.firstClose.await()
         released = true
@@ -618,7 +769,7 @@ class CaptureServiceTest {
         val start = CompletableDeferred<CaptureStartResult>()
 
         launch {
-            start.complete(service.startSession(source, FakeScoRoute(), output) { true })
+            start.complete(service.startSession(source, FakeScoRoute(), output, 60_000L) { true })
         }
         runCurrent()
         output.readyBeepStarted.await()
@@ -668,7 +819,7 @@ class CaptureServiceTest {
         val start = CompletableDeferred<CaptureStartResult>()
 
         launch {
-            start.complete(service.startSession(source, FakeScoRoute(), output) { !released })
+            start.complete(service.startSession(source, FakeScoRoute(), output, 60_000L) { !released })
         }
         runCurrent()
         output.readyBeepStarted.await()
@@ -695,7 +846,7 @@ class CaptureServiceTest {
         val start = CompletableDeferred<CaptureStartResult>()
 
         launch {
-            start.complete(service.startSession(source, FakeScoRoute(), output) { true })
+            start.complete(service.startSession(source, FakeScoRoute(), output, 60_000L) { true })
         }
         runCurrent()
         output.readyBeepStarted.await()
@@ -719,7 +870,7 @@ class CaptureServiceTest {
             startupEvidence = CaptureStartupEvidence(clientSilenced = null),
         )
 
-        val result = service.startSession(source, FakeScoRoute(), output) { true }
+        val result = service.startSession(source, FakeScoRoute(), output, 60_000L) { true }
 
         assertTrue("expected Started, got $result", result is CaptureStartResult.Started)
         val evidence = (result as CaptureStartResult.Started).evidence
@@ -738,7 +889,7 @@ class CaptureServiceTest {
         val sco = FakeScoRoute()
         val output = FakeOutput()
 
-        val result = service.startSession(source, sco, output) { true }
+        val result = service.startSession(source, sco, output, 60_000L) { true }
 
         assertTrue(result is CaptureStartResult.RecordingSilenced)
         val evidence = (result as CaptureStartResult.RecordingSilenced).evidence
@@ -751,13 +902,443 @@ class CaptureServiceTest {
         assertFalse(service.isCapturing.value)
     }
 
+    @Test
+    fun toneGeneratorExactShapes() {
+        val sampleRate = 16_000
+        val warning = CaptureFeedbackToneGenerator.generateWarningTones(sampleRate)
+        // 3 tones of 150ms and 2 silences of 150ms => total 750ms => 12_000 samples
+        assertEquals(12_000, warning.size)
+
+        // T1: 0..2399, Silence 1: 2400..4799, T2: 4800..7199, Silence 2: 7200..9599, T3: 9600..11999
+        for (i in 2400 until 4800) {
+            assertEquals(0.toShort(), warning[i])
+        }
+        for (i in 7200 until 9600) {
+            assertEquals(0.toShort(), warning[i])
+        }
+
+        // Check amplitudes and zero-crossings / shape of active parts
+        for (i in listOf(0, 4800, 9600)) {
+            // Tones should be exactly 880 Hz
+            for (idx in 0 until 2400) {
+                val phase = 2.0 * Math.PI * 880.0 * idx / sampleRate
+                val expected = (Math.sin(phase) * Short.MAX_VALUE * 0.35).toInt().toShort()
+                assertEquals(expected, warning[i + idx])
+            }
+        }
+
+        // Final tone: 750ms => 12_000 samples
+        val finalTone = CaptureFeedbackToneGenerator.generateFinalTone(sampleRate)
+        assertEquals(12_000, finalTone.size)
+        for (idx in 0 until 12_000) {
+            val phase = 2.0 * Math.PI * 880.0 * idx / sampleRate
+            val expected = (Math.sin(phase) * Short.MAX_VALUE * 0.35).toInt().toShort()
+            assertEquals(expected, finalTone[idx])
+        }
+    }
+
+    @Test
+    fun wrapperDelegationAndActiveRouteUse() = runTest {
+        val fakeOutput = FakeOutput()
+
+        // 1. ScopedPcmOutput
+        var released = false
+        val scoped = ScopedPcmOutput(fakeOutput) { released = true }
+        scoped.playCaptureFeedback(CaptureFeedbackTone.RecordingLimitWarning)
+        assertEquals(CaptureFeedbackTone.RecordingLimitWarning, fakeOutput.playedFeedbackTones.single())
+        fakeOutput.playedFeedbackTones.clear()
+
+        // 2. MediaResponsePcmOutput
+        val mediaResponse = MediaResponsePcmOutput(fakeOutput, object : ResponsePlayer {
+            override suspend fun play(recording: RecordedPcm) {}
+        })
+        mediaResponse.playCaptureFeedback(CaptureFeedbackTone.RecordingLimitFinal)
+        assertEquals(CaptureFeedbackTone.RecordingLimitFinal, fakeOutput.playedFeedbackTones.single())
+        fakeOutput.playedFeedbackTones.clear()
+
+        // 3. TelecomCapturePcmOutput
+        val telecom = TelecomCapturePcmOutput(
+            captureOutput = fakeOutput,
+            mediaResponsePlayer = object : ResponsePlayer {
+                override suspend fun play(recording: RecordedPcm) {}
+            },
+            releaseCaptureRoute = {},
+            awaitTelecomDisconnected = { null }
+        )
+        telecom.playCaptureFeedback(CaptureFeedbackTone.RecordingLimitWarning)
+        assertEquals(CaptureFeedbackTone.RecordingLimitWarning, fakeOutput.playedFeedbackTones.single())
+    }
+
+    @Test
+    fun continuedReadDuringTone() = runTest {
+        val service = captureService()
+        val source = BeepBoundarySource(
+            preBeepChunks = emptyList(),
+            postBeepChunks = listOf(ShortArray(160) { 1 }, ShortArray(160) { 2 }),
+        )
+        val mockOutput = object : PcmOutput {
+            override suspend fun playReadyBeep(coldStart: Boolean) = source.markBeepComplete()
+            override suspend fun playErrorBeep(coldStart: Boolean) = Unit
+            override suspend fun play(recording: RecordedPcm) = Unit
+            override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+                delay(100)
+            }
+        }
+        val startResult = service.startSession(
+            source,
+            FakeScoRoute(),
+            mockOutput,
+            60_000L,
+        ) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        val collectedFrames = mutableListOf<ShortArray>()
+        val collectJob = launch(UnconfinedTestDispatcher()) {
+            session.frames.collect {
+                collectedFrames.add(it)
+            }
+        }
+        runCurrent()
+
+        val emitJob = launch {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }
+        runCurrent()
+        source.allowPostBeepReads()
+        advanceTimeBy(50)
+        runCurrent()
+
+        assertTrue(collectedFrames.isNotEmpty())
+        assertTrue(source.committedReadCount > 0)
+        assertFalse(emitJob.isCompleted)
+        advanceTimeBy(50)
+        emitJob.join()
+        collectJob.cancel()
+        session.stop()
+    }
+
+    @Test
+    fun captureFeedbackPlaybackFailureReachesEmitterCaller() = runTest {
+        val service = captureService()
+        val source = FakeSource(continuous = true)
+        val output = object : PcmOutput {
+            override suspend fun playReadyBeep(coldStart: Boolean) = Unit
+            override suspend fun playErrorBeep(coldStart: Boolean) = Unit
+            override suspend fun play(recording: RecordedPcm) = Unit
+            override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+                throw IllegalStateException("feedback route failed")
+            }
+        }
+        val startResult = service.startSession(
+            source,
+            FakeScoRoute(),
+            output,
+            60_000L,
+        ) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        val failure = runCatching {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals("feedback route failed", failure?.message)
+        service.cancelSession(session)
+    }
+
+    @Test
+    fun lateFeedbackRejection() = runTest {
+        val service = captureService()
+        val source = FakeSource(continuous = true)
+        val fakeOutput = FakeOutput()
+        val startResult = service.startSession(source, FakeScoRoute(), fakeOutput, 60_000L) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        // Play warning once successfully
+        session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        assertEquals(CaptureFeedbackTone.RecordingLimitWarning, fakeOutput.playedFeedbackTones.single())
+        fakeOutput.playedFeedbackTones.clear()
+
+        // Stop session
+        session.stop()
+
+        // Try emitting late feedback -> should reject (throw IllegalStateException)
+        var thrown = false
+        try {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitFinal)
+        } catch (e: IllegalStateException) {
+            thrown = true
+        }
+        assertTrue("Expected IllegalStateException for late feedback after stop", thrown)
+
+        // Try cancel session
+        val startResult2 = service.startSession(source, FakeScoRoute(), fakeOutput, 60_000L) { true }
+        val session2 = (startResult2 as CaptureStartResult.Started).session
+        service.cancelSession(session2)
+        thrown = false
+        try {
+            session2.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitFinal)
+        } catch (e: IllegalStateException) {
+            thrown = true
+        }
+        assertTrue("Expected IllegalStateException for late feedback after cancel", thrown)
+
+        // Test natural max duration finalization rejection
+        val source3 = FakeSource(continuous = true)
+        val startResult3 = service.startSession(source3, FakeScoRoute(), fakeOutput, 50L) { true }
+        val session3 = (startResult3 as CaptureStartResult.Started).session
+
+        // Advance time to trigger natural max duration finalization
+        advanceTimeBy(100L)
+        runCurrent()
+
+        thrown = false
+        try {
+            session3.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitFinal)
+        } catch (e: IllegalStateException) {
+            thrown = true
+        }
+        assertTrue("Expected IllegalStateException for late feedback after max duration", thrown)
+    }
+
+    @Test
+    fun stopCancelJoinAndCancelFeedback() = runTest {
+        val service = captureService()
+        val source = FakeSource(continuous = true)
+
+        var tonePlayStarted = false
+        var tonePlayCompleted = false
+        var tonePlayCancelled = false
+        val slowOutput = object : PcmOutput {
+            override suspend fun playReadyBeep(coldStart: Boolean) {}
+            override suspend fun playErrorBeep(coldStart: Boolean) {}
+            override suspend fun play(recording: RecordedPcm) {}
+            override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+                tonePlayStarted = true
+                try {
+                    delay(10_000L) // Simulate long playing tone
+                    tonePlayCompleted = true
+                } catch (e: CancellationException) {
+                    tonePlayCancelled = true
+                    throw e
+                }
+            }
+        }
+
+        val startResult = service.startSession(source, FakeScoRoute(), slowOutput, 60_000L) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        // Start playing tone
+        val emitJob = launch {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }
+        runCurrent()
+        assertTrue(tonePlayStarted)
+
+        // Stop session -> should cancel tone and wait for it to join
+        session.stop()
+        runCurrent()
+        assertTrue(tonePlayCancelled)
+        assertFalse(tonePlayCompleted)
+        emitJob.join()
+
+        // Same for cancel
+        tonePlayStarted = false
+        tonePlayCompleted = false
+        tonePlayCancelled = false
+        val startResult2 = service.startSession(source, FakeScoRoute(), slowOutput, 60_000L) { true }
+        val session2 = (startResult2 as CaptureStartResult.Started).session
+
+        val emitJob2 = launch {
+            session2.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }
+        runCurrent()
+        assertTrue(tonePlayStarted)
+
+        service.cancelSession(session2)
+        runCurrent()
+        assertTrue(tonePlayCancelled)
+        assertFalse(tonePlayCompleted)
+        emitJob2.join()
+    }
+
+    @Test
+    fun callerCancellationCannotOrphanPlayback() = runTest {
+        val service = captureService()
+        val source = FakeSource(continuous = true)
+
+        var tonePlayStarted = false
+        var tonePlayCompleted = false
+        var tonePlayCancelled = false
+        val slowOutput = object : PcmOutput {
+            override suspend fun playReadyBeep(coldStart: Boolean) {}
+            override suspend fun playErrorBeep(coldStart: Boolean) {}
+            override suspend fun play(recording: RecordedPcm) {}
+            override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+                tonePlayStarted = true
+                try {
+                    delay(10_000L) // Simulate long playing tone
+                    tonePlayCompleted = true
+                } catch (e: CancellationException) {
+                    tonePlayCancelled = true
+                    throw e
+                }
+            }
+        }
+
+        val startResult = service.startSession(source, FakeScoRoute(), slowOutput, 60_000L) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        val emitJob = launch {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }
+        runCurrent()
+        assertTrue(tonePlayStarted)
+
+        // Cancel the caller job (emitJob)
+        emitJob.cancel()
+        runCurrent()
+
+        // Assert that the playback was cancelled and joined, and is not orphaned
+        assertTrue(tonePlayCancelled)
+        assertFalse(tonePlayCompleted)
+
+        // Ensure clean shutdown
+        session.stop()
+    }
+
+    @Test
+    fun maxDurationWaitsForFeedbackCancellation() = runTest {
+        val service = captureService()
+        val source = FakeSource(continuous = true)
+
+        var tonePlayStarted = false
+        var tonePlayCancelled = false
+        var toneCleanupFinished = false
+        var sessionCompletedWhileToneActive = false
+
+        val slowOutput = object : PcmOutput {
+            override suspend fun playReadyBeep(coldStart: Boolean) {}
+            override suspend fun playErrorBeep(coldStart: Boolean) {}
+            override suspend fun play(recording: RecordedPcm) {}
+            override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+                tonePlayStarted = true
+                try {
+                    delay(10_000L)
+                } catch (e: CancellationException) {
+                    tonePlayCancelled = true
+                    withContext(NonCancellable) {
+                        delay(1)
+                        toneCleanupFinished = true
+                    }
+                    throw e
+                }
+            }
+        }
+
+        val startResult = service.startSession(source, FakeScoRoute(), slowOutput, 100L) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        val emitJob = launch {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }
+        runCurrent()
+        assertTrue(tonePlayStarted)
+
+        var sessionCompleted = false
+        launch {
+            session.completion.await()
+            sessionCompleted = true
+            if (tonePlayStarted && !toneCleanupFinished) {
+                sessionCompletedWhileToneActive = true
+            }
+        }
+
+        advanceTimeBy(120L)
+        runCurrent()
+
+        assertTrue(tonePlayCancelled)
+        assertTrue(toneCleanupFinished)
+        assertTrue(sessionCompleted)
+        assertFalse("Session completed before tone cleanup was finished!", sessionCompletedWhileToneActive)
+
+        emitJob.join()
+    }
+
+    @Test
+    fun alreadyFinalizedStopCannotLeakPlayback() = runTest {
+        val service = captureService()
+        val source = FakeSource(continuous = true)
+
+        var tonePlayStarted = false
+        var tonePlayCancelled = false
+        var toneCleanupFinished = false
+        var stopCompleted = false
+
+        val slowOutput = object : PcmOutput {
+            override suspend fun playReadyBeep(coldStart: Boolean) {}
+            override suspend fun playErrorBeep(coldStart: Boolean) {}
+            override suspend fun play(recording: RecordedPcm) {}
+            override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+                tonePlayStarted = true
+                try {
+                    delay(10_000L)
+                } catch (e: CancellationException) {
+                    tonePlayCancelled = true
+                    withContext(NonCancellable) {
+                        delay(5_000L)
+                        toneCleanupFinished = true
+                    }
+                    throw e
+                }
+            }
+        }
+
+        val startResult = service.startSession(source, FakeScoRoute(), slowOutput, 100L) { true }
+        val session = (startResult as CaptureStartResult.Started).session
+
+        val emitJob = launch {
+            session.semanticFeedbackEmitter.emit(CaptureFeedbackTone.RecordingLimitWarning)
+        }
+        runCurrent()
+        assertTrue(tonePlayStarted)
+
+        val stopProbe = launch {
+            while (!tonePlayCancelled) {
+                delay(1)
+            }
+            val stopJob = launch {
+                session.stop()
+                stopCompleted = true
+            }
+            runCurrent()
+
+            assertFalse(stopCompleted)
+            assertFalse(toneCleanupFinished)
+
+            advanceTimeBy(5_000L)
+            runCurrent()
+
+            assertTrue(toneCleanupFinished)
+            assertTrue(stopCompleted)
+            stopJob.join()
+        }
+
+        advanceTimeBy(120L)
+        runCurrent()
+
+        stopProbe.join()
+        emitJob.join()
+    }
+
     // -- helpers -------------------------------------------------------------
 
     private suspend fun startedSession(
         service: CaptureService,
         source: FakeSource,
+        maxDurationMs: Long = 60_000L,
     ): CaptureSession {
-        val result = service.startSession(source, FakeScoRoute(), FakeOutput(onReadyBeep = source::markBeepComplete)) { true }
+        val result = service.startSession(source, FakeScoRoute(), FakeOutput(onReadyBeep = source::markBeepComplete), maxDurationMs) { true }
         return (result as CaptureStartResult.Started).session
     }
 
@@ -765,14 +1346,10 @@ class CaptureServiceTest {
         scope.coroutineContext[ContinuationInterceptor] as CoroutineDispatcher
 
     private fun TestScope.captureService(
-        maxDurationMs: Long = CaptureService.DEFAULT_MAX_DURATION_MS,
-        maxBufferSamplesFactor: Int = CaptureService.DEFAULT_BUFFER_FACTOR,
         clock: () -> Long = { testScheduler.currentTime },
     ): CaptureService = CaptureService(
         scope = this,
         readDispatcher = testDispatcher(this),
-        maxDurationMs = maxDurationMs,
-        maxBufferSamplesFactor = maxBufferSamplesFactor,
         clock = clock,
     )
 
@@ -961,6 +1538,8 @@ class CaptureServiceTest {
         override suspend fun playErrorBeep(coldStart: Boolean) = Unit
 
         override suspend fun play(recording: RecordedPcm) = Unit
+
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) = Unit
     }
 
     private class FakeSource(
@@ -1059,6 +1638,7 @@ class CaptureServiceTest {
         var readyBeepCount: Int = 0; private set
         var errorBeepCount: Int = 0; private set
         var playCount: Int = 0; private set
+        val playedFeedbackTones = mutableListOf<CaptureFeedbackTone>()
 
         override suspend fun playReadyBeep(coldStart: Boolean) {
             readyBeepCount += 1
@@ -1071,6 +1651,12 @@ class CaptureServiceTest {
 
         override suspend fun play(recording: RecordedPcm) {
             playCount += 1
+        }
+
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+            synchronized(playedFeedbackTones) {
+                playedFeedbackTones.add(tone)
+            }
         }
     }
 

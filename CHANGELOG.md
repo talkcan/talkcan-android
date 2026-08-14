@@ -4,6 +4,13 @@ All notable changes to Talkcan are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added host-enforced recording limits from 1 through 10 minutes for external
+  Lua input channels.
+- Added semantic warning tones that play through the active capture route
+  before a recording reaches its limit.
+
 ### Changed
 
 - Added the approved industrial visual system to the main dashboard. It uses

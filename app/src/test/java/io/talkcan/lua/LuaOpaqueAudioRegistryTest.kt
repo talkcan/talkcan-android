@@ -201,4 +201,24 @@ class LuaOpaqueAudioRegistryTest {
         assertNotNull(registry.consume(token, owner, LuaOpaqueAudioRegistry.Kind.Captured))
         assertEquals(0, registry.accounting().liveTokens)
     }
+
+    @Test
+    fun `default registry limits and process quota defaults are configured correctly`() {
+        val limits = LuaOpaqueAudioRegistry.Limits.DEFAULT
+        assertEquals(19_200_000L, limits.maxBytesPerArtifact)
+        assertEquals(600_000L, limits.maxDurationPerArtifactMillis)
+        assertEquals(32, limits.maxTokensPerOwner)
+        assertEquals(32L * 1024 * 1024, limits.maxBytesPerOwner)
+        assertEquals(64, limits.maxTokensPerGeneration)
+        assertEquals(48L * 1024 * 1024, limits.maxBytesPerGeneration)
+
+        // ProcessQuota default check
+        val processQuota = LuaOpaqueAudioRegistry.ProcessQuota.DEFAULT
+        // Clean any leftovers from other tests if they mutated the static default
+        processQuota.release(processQuota.liveTokens(), processQuota.retainedBytes())
+
+        assertTrue(processQuota.tryReserve(1, 64L * 1024 * 1024))
+        assertFalse(processQuota.tryReserve(1, 1L))
+        processQuota.release(1, 64L * 1024 * 1024)
+    }
 }

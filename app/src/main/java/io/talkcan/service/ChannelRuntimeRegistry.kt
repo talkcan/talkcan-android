@@ -5,6 +5,7 @@ import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.ChannelInputTarget
 import io.talkcan.audio.RecordedPcm
+import io.talkcan.audio.CapturePolicy
 import io.talkcan.channel.capability.CapabilityScopeIdentity
 import io.talkcan.channel.capability.ChannelCapabilityHost
 import io.talkcan.channel.capability.RevocableChannelCapabilityScope
@@ -1056,12 +1057,12 @@ class ChannelRuntimeRegistry(
         private val terminalLock = Any()
         private var terminalAdmissionClosed = false
         private val terminalCallbacks = mutableListOf<Job>()
+        override val capturePolicy: CapturePolicy get() = original.capturePolicy
 
-        override fun onInputStarted(session: ChannelAudioInputSession) {
-            runtimeScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                entry.gate.invoke(RuntimeInvocationPhase.INPUT_STARTED) {
-                    original.onInputStarted(session)
-                }
+
+        override suspend fun onInputStarted(session: ChannelAudioInputSession) {
+            entry.gate.invoke(RuntimeInvocationPhase.INPUT_STARTED) {
+                original.onInputStarted(session)
             }
         }
 
@@ -1080,18 +1081,17 @@ class ChannelRuntimeRegistry(
             }
         }
 
-        override fun onInputCancelled(reason: String) {
+        override suspend fun onInputCancelled(reason: String) {
             enqueueTerminal(RuntimeInvocationPhase.INPUT_CANCELLED) {
                 original.onInputCancelled(reason)
-            }
+            }?.join()
         }
 
-        override fun onInputFailed(reason: String) {
+        override suspend fun onInputFailed(reason: String) {
             enqueueTerminal(RuntimeInvocationPhase.INPUT_FAILED) {
                 original.onInputFailed(reason)
-            }
+            }?.join()
         }
-
         override suspend fun releaseCommittedTargetLease() {
             val callbacks = synchronized(terminalLock) {
                 if (terminalAdmissionClosed) return
@@ -1106,7 +1106,7 @@ class ChannelRuntimeRegistry(
         private fun enqueueTerminal(
             phase: RuntimeInvocationPhase,
             callback: suspend () -> Unit,
-        ) {
+        ): Job? {
             val job = runtimeScope.launch(start = CoroutineStart.LAZY) {
                 committedTarget.invoke(phase, callback = callback)
             }
@@ -1118,8 +1118,13 @@ class ChannelRuntimeRegistry(
                     true
                 }
             }
-            if (admitted) job.start()
-            else job.cancel()
+            return if (admitted) {
+                job.start()
+                job
+            } else {
+                job.cancel()
+                null
+            }
         }
     }
 

@@ -159,6 +159,7 @@ class PttRouteErrorFeedbackTest {
         }
 
         override suspend fun play(recording: RecordedPcm) = Unit
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) = Unit
 
         override suspend fun releaseRoute() {
             events?.add("release")

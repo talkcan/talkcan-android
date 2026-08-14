@@ -74,6 +74,7 @@ class KotlinLuaKernelBridgeContractTest {
                             }
                           end,
                           handle_lifecycle = function() end,
+                          handle_capture_lifecycle = function() end,
                           handle_input = function() end,
                           handle_sos = function() end,
                           handle_readiness = function() end,
@@ -87,6 +88,7 @@ class KotlinLuaKernelBridgeContractTest {
                 setOf(
                     "startup",
                     "handle_lifecycle",
+                    "handle_capture_lifecycle",
                     "handle_input",
                     "handle_sos",
                     "handle_readiness",
@@ -103,7 +105,7 @@ class KotlinLuaKernelBridgeContractTest {
             ) as? LuaKernelOutcome.Completed ?: error("startup callback failed")
             val result = org.json.JSONObject(startup.value ?: error("startup returned no value"))
             assertEquals(
-                "[\"coroutine\",\"math\",\"string\",\"table\",\"talkcan.audio\",\"talkcan.channel\",\"talkcan.fs\",\"talkcan.http\",\"talkcan.json\",\"talkcan.keyboard_output\",\"talkcan.log\",\"talkcan.playback\",\"talkcan.profiles\",\"talkcan.runtime\",\"talkcan.secrets\",\"talkcan.synthesis\",\"talkcan.transcription\",\"talkcan.work\",\"utf8\"]",
+                "[\"coroutine\",\"math\",\"string\",\"table\",\"talkcan.audio\",\"talkcan.channel\",\"talkcan.feedback\",\"talkcan.fs\",\"talkcan.http\",\"talkcan.json\",\"talkcan.keyboard_output\",\"talkcan.log\",\"talkcan.playback\",\"talkcan.profiles\",\"talkcan.runtime\",\"talkcan.secrets\",\"talkcan.synthesis\",\"talkcan.transcription\",\"talkcan.work\",\"utf8\"]",
                 result.getJSONArray("preloaded").toString(),
             )
             assertEquals(0, result.getJSONArray("forbidden").length())

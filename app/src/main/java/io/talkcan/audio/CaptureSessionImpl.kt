@@ -1,10 +1,13 @@
 package io.talkcan.audio
 
 import kotlin.math.sqrt
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -12,12 +15,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 
 /**
  * The single active capture session created by [CaptureService.startSession].
  *
  * Runs the PCM read loop on [readDispatcher], buffers up to
- * [maxDurationMs] × [maxBufferSamplesFactor] worth of samples, and
+ * [maxDurationMs] worth of samples, and
  * finalizes with a [CaptureCompletion] on max-duration, stop, or cancel.
  *
  * Extracted from [CaptureService] to reduce the service's scope; only
@@ -28,18 +35,80 @@ internal class CaptureSessionImpl(
     private val opened: OpenedCaptureSource,
     @Suppress("UNUSED_PARAMETER") private val coldStart: Boolean,
     private val readDispatcher: CoroutineDispatcher,
-    private val maxDurationMs: Long,
-    private val maxBufferSamplesFactor: Int,
+    override val maxDurationMs: Long,
     private val clock: () -> Long,
     private val onCaptureSignalChange: (Boolean) -> Unit,
     private val onLevelUpdate: (Float) -> Unit,
     private val onFinalize: (CaptureSessionImpl) -> Unit,
-) : CaptureSession {
+    private val pcmOutput: PcmOutput,
+) : CaptureSession, SemanticFeedbackEmitter {
     override val frames: SharedFlow<ShortArray>
     override val completion: Deferred<CaptureCompletion>
     override val sampleRate: Int = opened.sampleRate
+    private val startedAt = clock()
 
-    private val buffer = mutableListOf<Short>()
+    override val remainingDurationMs: Long
+        get() {
+            val elapsed = clock() - startedAt
+            return (maxDurationMs - elapsed).coerceAtLeast(0L)
+        }
+
+    override val semanticFeedbackEmitter: SemanticFeedbackEmitter get() = this
+
+    val emittedTones = mutableListOf<io.talkcan.service.CaptureFeedbackTone>()
+    private val feedbackMutex = Mutex()
+    private val feedbackLock = Any()
+    private var inFlightFeedbackJob: Job? = null
+
+    override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {
+        if (finalized != null) {
+            throw IllegalStateException("Session finalized")
+        }
+        feedbackMutex.withLock {
+            if (finalized != null) {
+                throw IllegalStateException("Session finalized")
+            }
+            synchronized(emittedTones) {
+                emittedTones.add(tone)
+            }
+            val job = scope.async {
+                try {
+                    pcmOutput.playCaptureFeedback(tone)
+                    null
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    failure
+                }
+            }
+            synchronized(feedbackLock) {
+                if (finalized != null) {
+                    job.cancel()
+                    throw IllegalStateException("Session finalized")
+                }
+                inFlightFeedbackJob = job
+            }
+            try {
+                job.await()?.let { throw it }
+            } catch (e: CancellationException) {
+                job.cancel()
+                withContext(NonCancellable) {
+                    runCatching { job.join() }
+                }
+                throw e
+            } finally {
+                synchronized(feedbackLock) {
+                    if (inFlightFeedbackJob === job) {
+                        inFlightFeedbackJob = null
+                    }
+                }
+            }
+        }
+    }
+
+    private val chunks = mutableListOf<ShortArray>()
+    private var totalSampleCount = 0L
+    private val maxSamples: Long
     private val bufferLock = Any()
     private val finalizeLock = Any()
     @Volatile private var finalized: RecordedPcm? = null
@@ -48,6 +117,20 @@ internal class CaptureSessionImpl(
     private val readJob: Job
 
     init {
+        val sampleRate = opened.sampleRate
+        maxSamples = try {
+            if (maxDurationMs < 0) {
+                throw IllegalArgumentException("maxDurationMs must be non-negative: $maxDurationMs")
+            }
+            val samplesLong = Math.multiplyExact(sampleRate.toLong(), maxDurationMs) / 1000L
+            if (samplesLong > Int.MAX_VALUE) {
+                throw ArithmeticException("Sample count exceeds Int.MAX_VALUE")
+            }
+            samplesLong
+        } catch (e: ArithmeticException) {
+            throw IllegalArgumentException("Sample count overflow: sampleRate=$sampleRate, maxDurationMs=$maxDurationMs", e)
+        }
+
         val mutableFrames = MutableSharedFlow<ShortArray>(
             replay = 0,
             // DROP_OLDEST requires a positive buffer; one slot keeps the
@@ -58,19 +141,16 @@ internal class CaptureSessionImpl(
         )
         frames = mutableFrames.asSharedFlow()
         completion = _completion
-        val sampleRate = opened.sampleRate
-        val maxBufferSamples = sampleRate * maxBufferSamplesFactor
         readJob = scope.launch(readDispatcher) {
-            readLoop(mutableFrames, maxBufferSamples)
+            readLoop(mutableFrames, maxSamples)
         }
     }
 
     private suspend fun readLoop(
         emitter: MutableSharedFlow<ShortArray>,
-        maxBufferSamples: Int,
+        maxSamples: Long,
     ) {
         val readBuffer = ShortArray(opened.bufferSizeShorts.coerceAtLeast(1))
-        val startedAt = clock()
         try {
             while (scope.isActive && finalized == null) {
                 if (clock() - startedAt >= maxDurationMs) {
@@ -80,7 +160,7 @@ internal class CaptureSessionImpl(
                 val read = opened.read(readBuffer)
                 if (read > 0) {
                     val chunk = readBuffer.copyOfRange(0, read)
-                    accumulate(chunk, maxBufferSamples)
+                    accumulate(chunk, maxSamples)
                     emitter.tryEmit(chunk)
                     onLevelUpdate(computeRms(chunk))
                 }
@@ -96,12 +176,19 @@ internal class CaptureSessionImpl(
         }
     }
 
-    private fun accumulate(chunk: ShortArray, maxBufferSamples: Int) {
+    private fun accumulate(chunk: ShortArray, maxSamples: Long) {
         synchronized(bufferLock) {
-            val remaining = maxBufferSamples - buffer.size
+            val remaining = maxSamples - totalSampleCount
             if (remaining <= 0) return
-            val toCopy = minOf(chunk.size, remaining)
-            for (i in 0 until toCopy) buffer += chunk[i]
+            val toCopy = minOf(chunk.size.toLong(), remaining).toInt()
+            if (toCopy <= 0) return
+            val chunkToRetain = if (toCopy == chunk.size) {
+                chunk
+            } else {
+                chunk.copyOfRange(0, toCopy)
+            }
+            chunks.add(chunkToRetain)
+            totalSampleCount += toCopy
         }
     }
 
@@ -116,36 +203,66 @@ internal class CaptureSessionImpl(
     }
 
     private fun readFinalPcm(): RecordedPcm = synchronized(bufferLock) {
-        RecordedPcm(buffer.toShortArray(), opened.sampleRate)
+        val result = ShortArray(totalSampleCount.toInt())
+        var offset = 0
+        for (chunk in chunks) {
+            chunk.copyInto(result, destinationOffset = offset)
+            offset += chunk.size
+        }
+        RecordedPcm(result, opened.sampleRate)
     }
 
-    private fun finalize(reason: CaptureCompletion): RecordedPcm {
-        val pcm = reason.recordedPcm
-        synchronized(finalizeLock) {
-            if (finalized != null) return finalized!!
-            finalized = pcm
-            onFinalize(this)
-            onCaptureSignalChange(false)
-            _completion.complete(reason)
+    private suspend fun finalize(reason: CaptureCompletion): RecordedPcm {
+        val callingJob = coroutineContext[Job]
+        return withContext(NonCancellable) {
+            val pcm = reason.recordedPcm
+            val jobToCleanup: Job?
+            synchronized(finalizeLock) {
+                if (finalized != null) return@withContext finalized!!
+                finalized = pcm
+                jobToCleanup = synchronized(feedbackLock) {
+                    val j = inFlightFeedbackJob
+                    inFlightFeedbackJob = null
+                    j
+                }
+            }
+
+            jobToCleanup?.let { job ->
+                job.cancel()
+                runCatching { job.join() }
+            }
+
+            if (callingJob !== readJob) {
+                readJob.cancel()
+                runCatching { readJob.join() }
+            } else {
+                readJob.cancel()
+            }
+
+            synchronized(finalizeLock) {
+                onFinalize(this@CaptureSessionImpl)
+                onCaptureSignalChange(false)
+                _completion.complete(reason)
+            }
+            pcm
         }
-        readJob.cancel()
-        return pcm
     }
 
     override suspend fun stop(): RecordedPcm {
         val existing = finalized
-        if (existing != null) return existing
-        return finalize(CaptureCompletion.Stopped(readFinalPcm())).also {
-            // Ensure the read loop has unwound before returning so the
-            // caller observes a quiescent source (matches the legacy
-            // recorder's synchronous stop semantics).
-            runCatching { readJob.join() }
+        if (existing != null) {
+            completion.await()
+            return existing
         }
+        return finalize(CaptureCompletion.Stopped(readFinalPcm()))
     }
 
-    fun cancel(): RecordedPcm {
+    suspend fun cancel(): RecordedPcm {
         val existing = finalized
-        if (existing != null) return existing
+        if (existing != null) {
+            completion.await()
+            return existing
+        }
         return finalize(CaptureCompletion.Cancelled(readFinalPcm()))
     }
 }

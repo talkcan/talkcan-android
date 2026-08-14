@@ -1,6 +1,7 @@
 package io.talkcan.audio
 
 import io.talkcan.model.ScoState
+import io.talkcan.service.CaptureFeedbackTone
 import kotlinx.coroutines.flow.StateFlow
 
 data class RecordedPcm(
@@ -29,6 +30,7 @@ interface PcmOutput {
     suspend fun playReadyBeep(coldStart: Boolean = false)
     suspend fun playErrorBeep(coldStart: Boolean = false)
     suspend fun play(recording: RecordedPcm)
+    suspend fun playCaptureFeedback(tone: CaptureFeedbackTone)
     suspend fun releaseRoute() {}
 }
 
@@ -115,6 +117,7 @@ class ScopedPcmOutput(
     override suspend fun playReadyBeep(coldStart: Boolean) = delegate.playReadyBeep(coldStart)
     override suspend fun playErrorBeep(coldStart: Boolean) = delegate.playErrorBeep(coldStart)
     override suspend fun play(recording: RecordedPcm) = delegate.play(recording)
+    override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) = delegate.playCaptureFeedback(tone)
     override suspend fun releaseRoute() = release()
 }
 

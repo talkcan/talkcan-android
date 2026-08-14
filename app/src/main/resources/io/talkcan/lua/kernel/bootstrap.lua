@@ -64,6 +64,9 @@ end
 coroutine.resume = function(thread, ...)
   local results = table.pack(native_coroutine_resume(thread, ...))
   if not results[1] then
+    if results[2] == "E_INTERRUPTED" or results[2] == "E_INSTRUCTION_BUDGET" then
+      error(results[2], 0)
+    end
     error("attempt to resume child coroutine", 2)
   end
   return table.unpack(results, 1, results.n)
@@ -179,6 +182,25 @@ local function schedule(audio, options, ...)
 end
 talkcan.playback = { schedule = schedule }
 
+local function feedback_emit(tone, ...)
+  if type(tone) ~= "string" or select(string.char(35), ...) ~= 0 then
+    return nil, { error = "E_INVALID_ARGUMENT" }
+  end
+  if tone ~= "recording_limit_warning" and tone ~= "recording_limit_final" then
+    return nil, { error = "E_INVALID_ARGUMENT" }
+  end
+  if talkcan._evaluating and talkcan._evaluating > 0 then error("effect-call-during-load") end
+  local ok, request_or_error = talkcan.host_feedback_emit(tone)
+  if not ok then return nil, { error = request_or_error } end
+  local success, value = talkcan.yield_operation(request_or_error)
+  if success then return true, nil end
+  return nil, { error = value }
+end
+talkcan.feedback = {
+  RECORDING_LIMIT_WARNING = "recording_limit_warning",
+  RECORDING_LIMIT_FINAL = "recording_limit_final",
+  emit = feedback_emit,
+}
 local function audio_file_yield(kind, args)
   if talkcan._evaluating and talkcan._evaluating > 0 then error("effect-call-during-load") end
   local ok, request_or_error = host_audio_file(kind, args)
@@ -579,11 +601,11 @@ talkcan.runtime.sleep = function(seconds, ...)
   if not in_active_dispatch() then
     return nil, { error = "E_INVALID_CONTEXT" }
   end
-  local ok, res = host_prepare_sleep(seconds)
+  local ok, sleep_token = host_prepare_sleep(seconds)
   if not ok then
-    return nil, { error = res }
+    return nil, { error = sleep_token }
   end
-  local success, value = coroutine.yield(talkcan._operation_yield_prefix .. "sleep:" .. tostring(res))
+  local success, value = coroutine.yield(talkcan._operation_yield_prefix .. "sleep:" .. sleep_token)
   if success then
     return true, nil
   else
@@ -635,7 +657,7 @@ function talkcan._new_image_namespace(sources, modules, image_env)
       __metatable = false,
     })
   end
-  local runtime, channel, log, transcription, synthesis, playback, audio, fs, keyboard_output, json, profiles, secrets, http, work = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+  local runtime, channel, log, transcription, synthesis, playback, audio, fs, keyboard_output, json, profiles, secrets, http, work, feedback = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
   for key, value in pairs(host.runtime) do runtime[key] = value end
   runtime.INSTANCE_ID = host.runtime.INSTANCE_ID
   for key, value in pairs(host.channel) do channel[key] = value end
@@ -651,6 +673,7 @@ function talkcan._new_image_namespace(sources, modules, image_env)
   for key, value in pairs(host.secrets) do secrets[key] = value end
   for key, value in pairs(host.http) do http[key] = value end
   for key, value in pairs(host.work) do work[key] = value end
+  for key, value in pairs(host.feedback) do feedback[key] = value end
   local private = {
     _sources = sources,
     _modules = modules,
@@ -671,6 +694,7 @@ function talkcan._new_image_namespace(sources, modules, image_env)
     http = readonly(http),
     json = readonly(json),
     work = readonly(work),
+    feedback = readonly(feedback),
   }
   private.module_put = function(name, value)
     name = tostring(name)
@@ -704,6 +728,7 @@ function talkcan._new_image_namespace(sources, modules, image_env)
     ["talkcan.http"] = private.http,
     ["talkcan.json"] = private.json,
     ["talkcan.work"] = private.work,
+    ["talkcan.feedback"] = private.feedback,
   }
   local proxy = readonly(private)
   return proxy

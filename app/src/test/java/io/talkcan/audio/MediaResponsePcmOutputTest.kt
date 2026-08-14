@@ -1,5 +1,6 @@
 package io.talkcan.audio
 
+import io.talkcan.service.CaptureFeedbackTone
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -61,6 +62,7 @@ class MediaResponsePcmOutputTest {
         data class ReadyBeep(val coldStart: Boolean) : LocalEvent
         data class ErrorBeep(val coldStart: Boolean) : LocalEvent
         data class Recording(val recording: RecordedPcm) : LocalEvent
+        data class Feedback(val tone: CaptureFeedbackTone) : LocalEvent
         data object ReleaseRoute : LocalEvent
     }
 
@@ -77,6 +79,10 @@ class MediaResponsePcmOutputTest {
 
         override suspend fun play(recording: RecordedPcm) {
             events += LocalEvent.Recording(recording)
+        }
+
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+            events += LocalEvent.Feedback(tone)
         }
 
         override suspend fun releaseRoute() {
@@ -192,6 +198,8 @@ class MediaRoutePlaybackGateTest {
             failure?.let { throw it }
             this.recording = recording
         }
+
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) = error("Unexpected feedback tone")
     }
 
     private companion object {

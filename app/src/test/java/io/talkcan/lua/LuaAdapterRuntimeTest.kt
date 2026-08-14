@@ -1,6 +1,7 @@
 package io.talkcan.lua
 
 import io.talkcan.audio.ChannelAudioInputSession
+import io.talkcan.audio.SemanticFeedbackEmitter
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.RecordedPcm
@@ -75,6 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -552,6 +554,113 @@ class LuaAdapterRuntimeTest {
             )
         } finally {
             harness.close()
+        }
+    }
+
+    @Test
+    fun `startup return validation for handle_input registration`() = runTest {
+        // 1. Missing Lua policy
+        val bridge1 = RecordingBridge().apply {
+            enqueue("startup", completed("{}"))
+        }
+        val harness1 = harness(bridge1, setOf("startup", "handle_input"))
+        try {
+            val res = harness1.runtime.activate()
+            assertTrue("Expected activation failure for missing policy", res is ChannelActivationResult.Failed)
+        } finally {
+            harness1.close()
+        }
+
+        // 2. Malformed Lua policy - input is not a map
+        val bridge2 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": "not-a-map"}"""))
+        }
+        val harness2 = harness(bridge2, setOf("startup", "handle_input"))
+        try {
+            val res = harness2.runtime.activate()
+            assertTrue("Expected activation failure for malformed input", res is ChannelActivationResult.Failed)
+        } finally {
+            harness2.close()
+        }
+
+        // 3. Malformed Lua policy - max_duration_ms is not an integer
+        val bridge3 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": {"max_duration_ms": "not-an-int"}}"""))
+        }
+        val harness3 = harness(bridge3, setOf("startup", "handle_input"))
+        try {
+            val res = harness3.runtime.activate()
+            assertTrue("Expected activation failure for non-integer duration", res is ChannelActivationResult.Failed)
+        } finally {
+            harness3.close()
+        }
+
+        // 4. Malformed Lua policy - extra keys in input
+        val bridge4 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": {"max_duration_ms": 300000, "extra": 1}}"""))
+        }
+        val harness4 = harness(bridge4, setOf("startup", "handle_input"))
+        try {
+            val res = harness4.runtime.activate()
+            assertTrue("Expected activation failure for extra keys", res is ChannelActivationResult.Failed)
+        } finally {
+            harness4.close()
+        }
+
+        // 5. Out-of-range Lua policy - too small
+        val bridge5 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": {"max_duration_ms": 59999}}"""))
+        }
+        val harness5 = harness(bridge5, setOf("startup", "handle_input"))
+        try {
+            val res = harness5.runtime.activate()
+            assertTrue("Expected activation failure for out-of-range small duration", res is ChannelActivationResult.Failed)
+        } finally {
+            harness5.close()
+        }
+
+        // 6. Out-of-range Lua policy - too large
+        val bridge6 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": {"max_duration_ms": 600001}}"""))
+        }
+        val harness6 = harness(bridge6, setOf("startup", "handle_input"))
+        try {
+            val res = harness6.runtime.activate()
+            assertTrue("Expected activation failure for out-of-range large duration", res is ChannelActivationResult.Failed)
+        } finally {
+            harness6.close()
+        }
+
+        // 7. Valid lower bound 60_000L propagation
+        val bridge7 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": {"max_duration_ms": 60000}}"""))
+            enqueue("handle_readiness", completed("""{"ready":true}"""))
+        }
+        val harness7 = harness(bridge7, setOf("startup", "handle_readiness", "handle_input"))
+        try {
+            val res = harness7.runtime.activate()
+            assertTrue("Expected successful activation for 60_000", res is ChannelActivationResult.Ready)
+            harness7.runtime.refreshReadiness()
+            val target = acceptedTarget(harness7.runtime)
+            assertEquals(60_000L, target.capturePolicy.maxDurationMs)
+        } finally {
+            harness7.close()
+        }
+
+        // 8. Valid upper bound 600_000L propagation
+        val bridge8 = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input": {"max_duration_ms": 600000}}"""))
+            enqueue("handle_readiness", completed("""{"ready":true}"""))
+        }
+        val harness8 = harness(bridge8, setOf("startup", "handle_readiness", "handle_input"))
+        try {
+            val res = harness8.runtime.activate()
+            assertTrue("Expected successful activation for 600_000", res is ChannelActivationResult.Ready)
+            harness8.runtime.refreshReadiness()
+            val target = acceptedTarget(harness8.runtime)
+            assertEquals(600_000L, target.capturePolicy.maxDurationMs)
+        } finally {
+            harness8.close()
         }
     }
 
@@ -2190,7 +2299,7 @@ class LuaAdapterRuntimeTest {
     fun `timer saturation resumes the exact sleeping coroutine with E_BUSY`() = runTest {
         val bridge = RecordingBridge().apply {
             enqueue("startup", completed(spawnedCoroutines = listOf(98)))
-            startCoroutineOutcomes += yielded(coroutineId = 98, operationId = 18, value = "sleep:1")
+            startCoroutineOutcomes += yielded(coroutineId = 98, operationId = 18, value = "sleep:1:1")
         }
         val resumed = CompletableDeferred<Unit>()
         bridge.onCoroutineResumed = { resumed.complete(Unit) }
@@ -2212,7 +2321,7 @@ class LuaAdapterRuntimeTest {
         val timers = ControlledTimerDelay()
         val bridge = RecordingBridge().apply {
             enqueue("startup", completed(spawnedCoroutines = listOf(110)))
-            startCoroutineOutcomes += yielded(coroutineId = 110, operationId = 20, value = "sleep:1")
+            startCoroutineOutcomes += yielded(coroutineId = 110, operationId = 20, value = "sleep:1:1")
         }
         val harness = harness(bridge, setOf("startup"), timerDelay = { delayMillis -> timers.await(delayMillis) })
         try {
@@ -2236,7 +2345,7 @@ class LuaAdapterRuntimeTest {
         val successTimers = ControlledTimerDelay()
         val successBridge = RecordingBridge().apply {
             enqueue("startup", completed(spawnedCoroutines = listOf(111)))
-            startCoroutineOutcomes += yielded(coroutineId = 111, operationId = 21, value = "sleep:1")
+            startCoroutineOutcomes += yielded(coroutineId = 111, operationId = 21, value = "sleep:1:1")
         }
         val successHarness = harness(successBridge, setOf("startup"), timerDelay = { delayMillis -> successTimers.await(delayMillis) })
         try {
@@ -2254,7 +2363,7 @@ class LuaAdapterRuntimeTest {
         val closeTimers = ControlledTimerDelay()
         val closeBridge = RecordingBridge().apply {
             enqueue("startup", completed(spawnedCoroutines = listOf(112)))
-            startCoroutineOutcomes += yielded(coroutineId = 112, operationId = 22, value = "sleep:1")
+            startCoroutineOutcomes += yielded(coroutineId = 112, operationId = 22, value = "sleep:1:1")
         }
         val closeHarness = harness(closeBridge, setOf("startup"), timerDelay = { delayMillis -> closeTimers.await(delayMillis) })
         try {
@@ -2512,7 +2621,7 @@ class LuaAdapterRuntimeTest {
     fun `authorized background sleep resumes exactly once and invalid yields are rejected locally`() = runTest {
         val bridge = RecordingBridge().apply {
             enqueue("startup", completed(spawnedCoroutines = listOf(92, 93)))
-            startCoroutineOutcomes += yielded(coroutineId = 92, operationId = 12, value = "sleep:0")
+            startCoroutineOutcomes += yielded(coroutineId = 92, operationId = 12, value = "sleep:1:0")
             startCoroutineOutcomes += yielded(coroutineId = 93, operationId = 13, value = "not-a-sleep")
         }
         val harness = harness(bridge, setOf("startup"))
@@ -2647,7 +2756,7 @@ class LuaAdapterRuntimeTest {
     fun `close before a background timer fires suppresses its coroutine resume`() = runTest {
         val bridge = RecordingBridge().apply {
             enqueue("startup", completed(spawnedCoroutines = listOf(94)))
-            startCoroutineOutcomes += yielded(coroutineId = 94, operationId = 14, value = "sleep:3600")
+            startCoroutineOutcomes += yielded(coroutineId = 94, operationId = 14, value = "sleep:1:3600")
         }
         val harness = harness(bridge, setOf("startup"))
         try {
@@ -2667,11 +2776,15 @@ class LuaAdapterRuntimeTest {
     @Test
     fun `malformed and out-of-range native sleep labels are rejected without timer admission`() = runTest {
         val bridge = RecordingBridge().apply {
-            enqueue("startup", completed(spawnedCoroutines = listOf(120, 121, 122, 123)))
-            startCoroutineOutcomes += yielded(coroutineId = 120, operationId = 30, value = "sleep:-1")
-            startCoroutineOutcomes += yielded(coroutineId = 121, operationId = 31, value = "sleep:NaN")
-            startCoroutineOutcomes += yielded(coroutineId = 122, operationId = 32, value = "sleep:Infinity")
-            startCoroutineOutcomes += yielded(coroutineId = 123, operationId = 33, value = "sleep:86401")
+            enqueue("startup", completed(spawnedCoroutines = listOf(120, 121, 122, 123, 124, 125, 126, 127)))
+            startCoroutineOutcomes += yielded(coroutineId = 120, operationId = 30, value = "sleep:1:-1")
+            startCoroutineOutcomes += yielded(coroutineId = 121, operationId = 31, value = "sleep:1:NaN")
+            startCoroutineOutcomes += yielded(coroutineId = 122, operationId = 32, value = "sleep:1:Infinity")
+            startCoroutineOutcomes += yielded(coroutineId = 123, operationId = 33, value = "sleep:1:86401")
+            startCoroutineOutcomes += yielded(coroutineId = 124, operationId = 34, value = "sleep:1")
+            startCoroutineOutcomes += yielded(coroutineId = 125, operationId = 35, value = "sleep:abc:1")
+            startCoroutineOutcomes += yielded(coroutineId = 126, operationId = 36, value = "sleep:1:1:1")
+            startCoroutineOutcomes += yielded(coroutineId = 127, operationId = 37, value = "sleep:1:1:extra")
         }
         val harness = harness(bridge, setOf("startup"))
         try {
@@ -2680,6 +2793,10 @@ class LuaAdapterRuntimeTest {
 
             assertEquals(
                 listOf(
+                    false to "E_INVALID_YIELD",
+                    false to "E_INVALID_YIELD",
+                    false to "E_INVALID_YIELD",
+                    false to "E_INVALID_YIELD",
                     false to "E_INVALID_YIELD",
                     false to "E_INVALID_YIELD",
                     false to "E_INVALID_YIELD",
@@ -2696,9 +2813,9 @@ class LuaAdapterRuntimeTest {
     fun `sleep timeout resumes a still-live task which may issue another operation`() = runTest {
         val timers = ControlledTimerDelay()
         val bridge = RecordingBridge().apply {
-            enqueue("startup", completed(spawnedCoroutines = listOf(124)))
-            startCoroutineOutcomes += yielded(coroutineId = 124, operationId = 34, value = "sleep:1")
-            resumeOutcomes += yielded(coroutineId = 124, operationId = 35, value = "sleep:0")
+            enqueue("startup", completed(spawnedCoroutines = listOf(200)))
+            startCoroutineOutcomes += yielded(coroutineId = 200, operationId = 200, value = "sleep:1:1")
+            resumeOutcomes += yielded(coroutineId = 200, operationId = 201, value = "sleep:1:0")
         }
         val harness = harness(bridge, setOf("startup"), timerDelay = { delayMillis -> timers.await(delayMillis) })
         try {
@@ -2717,6 +2834,57 @@ class LuaAdapterRuntimeTest {
                 listOf(false to "E_TIMEOUT", true to ""),
                 bridge.resumeCalls,
             )
+            timers.releaseAll()
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `sleep timer delay is independent of token value`() = runTest {
+        val timers = ControlledTimerDelay()
+        val bridge = RecordingBridge().apply {
+            enqueue("startup", completed(spawnedCoroutines = listOf(300)))
+            // Token 999 is deliberately different from the requested 45-second
+            // delay. The adapter must schedule the timer for 45 seconds (45 000
+            // ms), not 999 seconds, proving the delay field drives the timer
+            // while the token field is opaque to the adapter.
+            startCoroutineOutcomes += yielded(coroutineId = 300, operationId = 300, value = "sleep:999:45")
+        }
+        val harness = harness(bridge, setOf("startup"), timerDelay = { delayMillis -> timers.await(delayMillis) })
+        try {
+            assertEquals(ChannelActivationResult.Ready, harness.runtime.activate())
+            harness.authorizeStagedTasks()
+            timers.awaitPending()
+            // The requested timer fires at 45 000 ms and the deadline timer
+            // fires at 45 000 + slack. Neither may be 999 000 ms.
+            timers.assertPending(listOf(45_000L, 45_100L))
+            timers.release(0)
+            assertEquals(listOf(true to ""), bridge.resumeCalls)
+            timers.releaseAll()
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `sleep timer delay matches warning tone durations regardless of token`() = runTest {
+        val timers = ControlledTimerDelay()
+        val bridge = RecordingBridge().apply {
+            enqueue("startup", completed(spawnedCoroutines = listOf(301)))
+            // Token 888 is deliberately different from the requested 57-second
+            // delay. The adapter must schedule the timer for 57 seconds (57 000
+            // ms), not 888 seconds, proving the token cannot affect the timer.
+            startCoroutineOutcomes += yielded(coroutineId = 301, operationId = 301, value = "sleep:888:57")
+        }
+        val harness = harness(bridge, setOf("startup"), timerDelay = { delayMillis -> timers.await(delayMillis) })
+        try {
+            assertEquals(ChannelActivationResult.Ready, harness.runtime.activate())
+            harness.authorizeStagedTasks()
+            timers.awaitPending()
+            timers.assertPending(listOf(57_000L, 57_100L))
+            timers.release(0)
+            assertEquals(listOf(true to ""), bridge.resumeCalls)
             timers.releaseAll()
         } finally {
             harness.close()
@@ -2816,6 +2984,28 @@ class LuaAdapterRuntimeTest {
             assertEquals(0, harness.capabilityHost.availabilityCalls)
             assertEquals(0, harness.capabilityHost.prepareCalls)
             assertEquals(0, backend.calls)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `audio feedback dispatch fails with invalid context`() = runTest {
+        val bridge = RecordingBridge().apply {
+            enqueue("handle_readiness", completed("""{"ready":true}"""))
+            val claimId = registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning)
+            enqueue("handle_input", yielded(value = claimId))
+        }
+        val harness = harness(bridge, setOf("startup", "handle_readiness", "handle_input"))
+        try {
+            assertEquals(ChannelActivationResult.Ready, harness.runtime.activate())
+            harness.runtime.refreshReadiness()
+            val target = acceptedTarget(harness.runtime)
+            target.onInputStarted(session(16_000))
+            val release = async { target.onInputReleased(RecordedPcm(shortArrayOf(1), 16_000)) }
+            runCurrent()
+            assertEquals(ChannelInputResult.None, release.await())
+            assertEquals(listOf(false to "E_INVALID_CONTEXT"), bridge.resumeCalls)
         } finally {
             harness.close()
         }
@@ -3587,6 +3777,11 @@ class LuaAdapterRuntimeTest {
     private fun session(sampleRate: Int): ChannelAudioInputSession = object : ChannelAudioInputSession {
         override val frames = emptyFlow<ShortArray>()
         override val sampleRate: Int = sampleRate
+        override val maxDurationMs = 60_000L
+        override val remainingDurationMs = 60_000L
+        override val semanticFeedbackEmitter = object : SemanticFeedbackEmitter {
+            override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+        }
     }
     private suspend fun harness(
         bridge: RecordingBridge,
@@ -4025,6 +4220,24 @@ class LuaAdapterRuntimeTest {
             return id.toString()
         }
 
+        fun registerFeedbackClaim(
+            tone: io.talkcan.service.CaptureFeedbackTone,
+        ): String {
+            val id = nextRequestId++
+            claims[id] = HostOperationClaim.Admitted(
+                requestId = id,
+                kind = HostOperationKind.AUDIO_FEEDBACK,
+                audioToken = null,
+                text = null,
+                language = null,
+                voice = null,
+                speed = 1.0,
+                delaySeconds = 0.0,
+                feedbackTone = tone,
+            )
+            return id.toString()
+        }
+
         /** Registers a filesystem claim; returns its opaque request-id string for the yielded value. */
         fun registerFsClaim(
             kind: HostOperationKind,
@@ -4143,9 +4356,20 @@ class LuaAdapterRuntimeTest {
         ): LuaKernelOutcome {
             callbackCalls += CallbackCall(callbackHandle.name, config)
             beforeCallback?.invoke(callbackHandle.name)
+            val outcome = scriptedCallbacks[callbackHandle.name]?.removeFirstOrNull()
+                ?: if (retainedCallbacks.contains("handle_input")) {
+                    completed("""{"input":{"max_duration_ms":300000}}""")
+                } else {
+                    completed()
+                }
+            val finalOutcome = if (outcome is LuaKernelOutcome.Completed && (outcome.value == null || outcome.value.isEmpty()) && retainedCallbacks.contains("handle_input")) {
+                completed("""{"input":{"max_duration_ms":300000}}""")
+            } else {
+                outcome
+            }
             return admitSpawned(
                 "startup",
-                scriptedCallbacks[callbackHandle.name]?.removeFirstOrNull() ?: completed(),
+                finalOutcome,
                 spawnAdmission,
             )
         }
@@ -4234,6 +4458,291 @@ class LuaAdapterRuntimeTest {
         }
     }
 
+    @Test
+    fun `capture lifecycle exact payloads and token management`() = runTest {
+        val bridge = RecordingBridge().apply {
+            enqueue("startup", completed("""{"input":{"max_duration_ms":120000}}"""))
+            enqueue("handle_readiness", completed("""{"ready":true}"""))
+
+            // 1. Success case: capture_started spawns 500L, which successfully emits feedback
+            enqueue("handle_capture_lifecycle", completed(spawnedCoroutines = listOf(500L)))
+        }
+        val harness = harness(
+            bridge,
+            setOf("startup", "handle_readiness", "handle_capture_lifecycle", "handle_input"),
+        )
+        try {
+            assertEquals(ChannelActivationResult.Ready, harness.runtime.activate())
+            harness.authorizeStagedTasks()
+            harness.runtime.refreshReadiness()
+            val target = acceptedTarget(harness.runtime)
+            val emitter = object : SemanticFeedbackEmitter {
+                val tones = mutableListOf<io.talkcan.service.CaptureFeedbackTone>()
+                override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {
+                    tones += tone
+                }
+            }
+            val fakeSession = object : ChannelAudioInputSession {
+                override val sampleRate = 16_000
+                override val frames = kotlinx.coroutines.flow.emptyFlow<ShortArray>()
+                override val maxDurationMs = 120_000L
+                override val remainingDurationMs = 100_000L
+                override val semanticFeedbackEmitter = emitter
+            }
+
+            val feedbackClaimId = bridge.registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal)
+            bridge.startCoroutineOutcomes += yielded(coroutineId = 500L, operationId = 1000L, value = feedbackClaimId)
+            bridge.resumeOutcomes += completed()
+
+            // 1. Started payload check and success case
+            target.onInputStarted(fakeSession)
+            runCurrent()
+            val startCall = bridge.callbackCalls.first { it.name == "handle_capture_lifecycle" }
+            val startMap = startCall.arguments as LuaValue.Map
+            assertEquals("capture_started", (startMap.pairs["event"] as LuaValue.StringValue).value)
+            assertEquals(120000L, (startMap.pairs["max_duration_ms"] as LuaValue.Integer).value)
+            assertEquals(100000L, (startMap.pairs["remaining_duration_ms"] as LuaValue.Integer).value)
+
+            // Verify success emission
+            assertEquals(io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal, emitter.tones.single())
+
+            // 2. Terminal spawn rejection check
+            // capture_released spawns 600L -> must reject spawn
+            bridge.enqueue("handle_capture_lifecycle", completed(spawnedCoroutines = listOf(600L)))
+            target.onInputReleased(RecordedPcm(shortArrayOf(1), 16_000))
+            runCurrent()
+            val releasedCall = bridge.callbackCalls.filter { it.name == "handle_capture_lifecycle" }[1]
+            val releasedMap = releasedCall.arguments as LuaValue.Map
+            assertEquals("capture_released", (releasedMap.pairs["event"] as LuaValue.StringValue).value)
+
+            // Check that spawn admission of 600L was rejected (result 2)
+            val spawn600 = bridge.spawnAdmissions.firstOrNull { it.coroutineId == 600L }
+            org.junit.Assert.assertNotNull("600L should attempt spawn admission", spawn600)
+            assertEquals(2, spawn600!!.result)
+
+            // capture_cancelled spawns 700L -> must reject spawn
+            bridge.enqueue("handle_capture_lifecycle", completed(spawnedCoroutines = listOf(700L)))
+            target.onInputCancelled("reason")
+            runCurrent()
+            val cancelSpawn = bridge.spawnAdmissions.firstOrNull { it.coroutineId == 700L }
+            org.junit.Assert.assertNotNull("700L should attempt spawn admission", cancelSpawn)
+            assertEquals(2, cancelSpawn!!.result)
+
+            // capture_failed spawns 800L -> must reject spawn
+            bridge.enqueue("handle_capture_lifecycle", completed(spawnedCoroutines = listOf(800L)))
+            target.onInputFailed("reason")
+            runCurrent()
+            val failSpawn = bridge.spawnAdmissions.firstOrNull { it.coroutineId == 800L }
+            org.junit.Assert.assertNotNull("800L should attempt spawn admission", failSpawn)
+            assertEquals(2, failSpawn!!.result)
+
+            // 3. Diagnostic containment
+            bridge.enqueue("handle_capture_lifecycle", LuaKernelOutcome.RuntimeFailure(41, 7, "simulated lifecycle failure"))
+            target.onInputStarted(fakeSession)
+            runCurrent()
+            assertTrue(harness.runtime.localDiagnosticSnapshot.any { it.contains("handle_capture_lifecycle failed") })
+            org.junit.Assert.assertNotEquals(ChannelExecutionStatus.FAILED, harness.runtime.snapshot.value.executionStatus)
+
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `audio feedback authorization and context validation`() = runTest {
+        val bridge = RecordingBridge().apply {
+            // Startup spawns 200L
+            enqueue("startup", completed("""{"input":{"max_duration_ms":120000}}""", spawnedCoroutines = listOf(200L)))
+            enqueue("handle_readiness", completed("""{"ready":true}"""))
+            // capture_started spawns 500L
+            enqueue("handle_capture_lifecycle", completed(spawnedCoroutines = listOf(500L)))
+        }
+        val harness = harness(
+            bridge,
+            setOf("startup", "handle_readiness", "handle_capture_lifecycle", "handle_input", "handle_sos"),
+        )
+        try {
+            // Script startup coroutine 200L to try audio feedback -> should fail E_INVALID_CONTEXT (context MANAGED but no token)
+            val startupFeedbackClaim = bridge.registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning)
+            bridge.startCoroutineOutcomes += yielded(coroutineId = 200L, operationId = 1001L, value = startupFeedbackClaim)
+            bridge.resumeOutcomes += completed()
+
+            assertEquals(ChannelActivationResult.Ready, harness.runtime.activate())
+            harness.authorizeStagedTasks()
+            harness.runtime.refreshReadiness()
+            runCurrent()
+
+            // Verify startup-spawned task was resumed with E_INVALID_CONTEXT
+            val startupResume = bridge.resumeCalls.firstOrNull()
+            org.junit.Assert.assertNotNull(startupResume)
+            assertEquals(false, startupResume!!.first)
+            assertEquals("E_INVALID_CONTEXT", startupResume.second)
+
+            val target = acceptedTarget(harness.runtime)
+            val emitter = object : SemanticFeedbackEmitter {
+                val tones = mutableListOf<io.talkcan.service.CaptureFeedbackTone>()
+                override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {
+                    tones += tone
+                }
+            }
+            val fakeSession = object : ChannelAudioInputSession {
+                override val sampleRate = 16_000
+                override val frames = kotlinx.coroutines.flow.emptyFlow<ShortArray>()
+                override val maxDurationMs = 120_000L
+                override val remainingDurationMs = 100_000L
+                override val semanticFeedbackEmitter = emitter
+            }
+
+            // Script capture coroutine 500L to first sleep, then yield audio feedback
+            bridge.startCoroutineOutcomes += yielded(coroutineId = 500L, operationId = 1002L, value = "sleep:1:1")
+            val validFeedbackClaim = bridge.registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal)
+            bridge.resumeOutcomes += yielded(coroutineId = 500L, operationId = 1003L, value = validFeedbackClaim)
+            bridge.resumeOutcomes += completed()
+
+            // Start input
+            target.onInputStarted(fakeSession)
+            runCurrent()
+
+            // Coroutine 500L is now suspended on sleep. Let's release the input, which revokes the active token!
+            bridge.enqueue("handle_capture_lifecycle", completed())
+            target.onInputReleased(RecordedPcm(shortArrayOf(1), 16_000))
+            runCurrent()
+
+            // Advance time to resume coroutine 500L and trigger its audio feedback yield
+            advanceTimeBy(1000)
+            runCurrent()
+
+            // Verify that the feedback yield failed with E_INVALID_CONTEXT because the token was revoked
+            val captureResume = bridge.resumeCalls.lastOrNull()
+            org.junit.Assert.assertNotNull(captureResume)
+            assertEquals(false, captureResume!!.first)
+            assertEquals("E_INVALID_CONTEXT", captureResume.second)
+
+            // Let's also test SOS spawned task failure
+            bridge.enqueue("handle_sos", completed(spawnedCoroutines = listOf(401L)))
+            val sosFeedbackClaim = bridge.registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning)
+            bridge.startCoroutineOutcomes += yielded(coroutineId = 401L, operationId = 1004L, value = sosFeedbackClaim)
+            bridge.resumeOutcomes += completed()
+
+            harness.runtime.handleSos()
+            runCurrent()
+
+            // Verify SOS-spawned task was resumed with E_INVALID_CONTEXT
+            val sosResume = bridge.resumeCalls.lastOrNull()
+            org.junit.Assert.assertNotNull(sosResume)
+            assertEquals(false, sosResume!!.first)
+            assertEquals("E_INVALID_CONTEXT", sosResume.second)
+
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `capture-scoped managed task retains authorization through sleep with differing coroutine ID`() = runTest {
+        // Native task admission and suspended coroutine identities are distinct.
+        // The old map stored the capture token under admission ID 500L, then
+        // looked it up under yielded coroutine ID 501L and denied feedback.
+        // Direct propagation keeps authorization independent of either ID.
+        val bridge = RecordingBridge().apply {
+            // Startup spawns 200L (unscoped — no capture token)
+            enqueue("startup", completed("""{"input":{"max_duration_ms":120000}}""", spawnedCoroutines = listOf(200L)))
+            enqueue("handle_readiness", completed("""{"ready":true}"""))
+            // capture_started spawns 500L (capture-scoped)
+            enqueue("handle_capture_lifecycle", completed(spawnedCoroutines = listOf(500L)))
+        }
+        val harness = harness(
+            bridge,
+            setOf("startup", "handle_readiness", "handle_capture_lifecycle", "handle_input"),
+            timerDelay = {},
+        )
+        try {
+            // Script unscoped startup coroutine 200L to attempt audio feedback.
+            // It must be denied because it carries no capture scope token.
+            val startupFeedbackClaim = bridge.registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning)
+            bridge.startCoroutineOutcomes += yielded(coroutineId = 200L, operationId = 1001L, value = startupFeedbackClaim)
+            bridge.resumeOutcomes += completed()
+
+            assertEquals(ChannelActivationResult.Ready, harness.runtime.activate())
+            harness.authorizeStagedTasks()
+            harness.runtime.refreshReadiness()
+            runCurrent()
+
+            // Verify unscoped startup task was denied AUDIO_FEEDBACK.
+            val startupResume = bridge.resumeCalls.firstOrNull()
+            org.junit.Assert.assertNotNull(startupResume)
+            assertEquals(false, startupResume!!.first)
+            assertEquals("E_INVALID_CONTEXT", startupResume.second)
+
+            val target = acceptedTarget(harness.runtime)
+            val emitter = object : SemanticFeedbackEmitter {
+                val tones = mutableListOf<io.talkcan.service.CaptureFeedbackTone>()
+                override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {
+                    tones += tone
+                }
+            }
+            val fakeSession = object : ChannelAudioInputSession {
+                override val sampleRate = 16_000
+                override val frames = kotlinx.coroutines.flow.emptyFlow<ShortArray>()
+                override val maxDurationMs = 120_000L
+                override val remainingDurationMs = 100_000L
+                override val semanticFeedbackEmitter = emitter
+            }
+
+            // Task 500L initially yields as native coroutine 501L, sleeps, then
+            // yields feedback under the same suspended-coroutine identity.
+            bridge.startCoroutineOutcomes += yielded(coroutineId = 501L, operationId = 1002L, value = "sleep:1:1")
+            val validFeedbackClaim = bridge.registerFeedbackClaim(io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal)
+            bridge.resumeOutcomes += yielded(coroutineId = 501L, operationId = 1003L, value = validFeedbackClaim)
+            bridge.resumeOutcomes += completed()
+
+            // Start input → capture_started spawns 500L with capture scope token.
+            target.onInputStarted(fakeSession)
+            runCurrent()
+
+            // Under the old code: resumeSlice looked up taskCaptureTokens[501L]
+            // which was never stored (only 500L was), so AUDIO_FEEDBACK was
+            // denied with E_INVALID_CONTEXT and emitter.tones was empty.
+            // Under the new code: captureScopeToken is propagated directly
+            // through driveManagedTaskOutcomes, matching activeToken regardless
+            // of coroutine identity, so feedback is emitted.
+            assertEquals(
+                "Capture-scoped task must remain authorized after sleep when native IDs differ; " +
+                    "started=${bridge.startedCoroutines}, spawns=${bridge.spawnAdmissions}, " +
+                    "resumes=${bridge.resumeCalls}, diagnostics=${harness.runtime.localDiagnosticSnapshot}",
+                listOf(io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal),
+                emitter.tones,
+            )
+
+            // The feedback resume must succeed, not be denied.
+            val feedbackResume = bridge.resumeCalls.lastOrNull()
+            org.junit.Assert.assertNotNull(feedbackResume)
+            assertEquals(true, feedbackResume!!.first)
+            assertEquals("{\"ok\":true}", feedbackResume.second)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `explicit non-Lua session behavior`() = runTest {
+        val fakeSession = object : io.talkcan.audio.CaptureSession {
+            override val frames = kotlinx.coroutines.flow.MutableSharedFlow<ShortArray>()
+            override val completion = kotlinx.coroutines.CompletableDeferred<io.talkcan.audio.CaptureCompletion>()
+            override val sampleRate = 16_000
+            override val maxDurationMs = 60_000L
+            override val remainingDurationMs = 45_000L
+            override val semanticFeedbackEmitter = object : SemanticFeedbackEmitter {
+                override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+            }
+            override suspend fun stop() = RecordedPcm(shortArrayOf(), 16_000)
+        }
+        val pcmInputSession = io.talkcan.audio.CaptureChannelAudioInputSession(fakeSession)
+        assertEquals(16_000, pcmInputSession.sampleRate)
+        assertEquals(60_000L, pcmInputSession.maxDurationMs)
+        assertEquals(45_000L, pcmInputSession.remainingDurationMs)
+        assertEquals(fakeSession.semanticFeedbackEmitter, pcmInputSession.semanticFeedbackEmitter)
+    }
     private companion object {
         fun completed(
             value: String? = null,

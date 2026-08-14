@@ -1,6 +1,7 @@
 package io.talkcan.audio
 
 import io.talkcan.model.ScoState
+import io.talkcan.service.CaptureFeedbackTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
@@ -247,6 +248,7 @@ class AudioRouteResolverTest {
         override suspend fun playReadyBeep(coldStart: Boolean) { playEndpoints += endpoint }
         override suspend fun playErrorBeep(coldStart: Boolean) { playEndpoints += endpoint }
         override suspend fun play(recording: RecordedPcm) { playEndpoints += endpoint }
+        override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) { playEndpoints += endpoint }
     }
 
     private class RecordingResponsePlayer(

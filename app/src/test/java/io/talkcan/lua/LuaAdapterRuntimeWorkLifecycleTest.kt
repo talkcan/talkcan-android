@@ -1,6 +1,7 @@
 package io.talkcan.lua
 
 import io.talkcan.audio.ChannelAudioInputSession
+import io.talkcan.audio.SemanticFeedbackEmitter
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.RecordedPcm
@@ -422,6 +423,11 @@ class LuaAdapterRuntimeWorkLifecycleTest {
     private fun session(sampleRate: Int): ChannelAudioInputSession = object : ChannelAudioInputSession {
         override val frames = emptyFlow<ShortArray>()
         override val sampleRate: Int = sampleRate
+        override val maxDurationMs = 60_000L
+        override val remainingDurationMs = 60_000L
+        override val semanticFeedbackEmitter = object : SemanticFeedbackEmitter {
+            override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+        }
     }
 
     private class WorkHarness(
@@ -651,7 +657,12 @@ class LuaAdapterRuntimeWorkLifecycleTest {
             config: LuaValue,
             spawnAdmission: LuaSpawnAdmission,
         ): LuaKernelOutcome = admitSpawned(
-            scriptedCallbacks[callbackHandle.name]?.removeFirstOrNull() ?: completed(),
+            scriptedCallbacks[callbackHandle.name]?.removeFirstOrNull()
+                ?: if ("handle_input" in retainedCallbacks) {
+                    completed("""{"input":{"max_duration_ms":60000}}""")
+                } else {
+                    completed()
+                },
             spawnAdmission,
         )
 

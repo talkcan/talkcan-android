@@ -1,6 +1,7 @@
 package io.talkcan.audio
 
 import android.media.AudioAttributes
+import io.talkcan.service.CaptureFeedbackTone
 import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -69,6 +70,10 @@ internal class MediaResponsePcmOutput(
 
     override suspend fun play(recording: RecordedPcm) {
         responsePlayer.play(recording)
+    }
+
+    override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+        localOutput.playCaptureFeedback(tone)
     }
 }
 

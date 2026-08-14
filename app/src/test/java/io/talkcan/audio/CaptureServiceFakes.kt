@@ -39,11 +39,9 @@ object CaptureServiceFakes {
     @OptIn(ExperimentalCoroutinesApi::class)
     fun newService(
         scope: TestScope,
-        maxDurationMs: Long = CaptureService.DEFAULT_MAX_DURATION_MS,
     ): CaptureService = CaptureService(
         scope = scope,
         readDispatcher = testDispatcher(scope),
-        maxDurationMs = maxDurationMs,
         clock = { scope.testScheduler.currentTime },
     )
 }

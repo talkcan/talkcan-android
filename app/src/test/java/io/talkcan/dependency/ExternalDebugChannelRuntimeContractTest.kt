@@ -1,6 +1,7 @@
 package io.talkcan.dependency
 
 import io.talkcan.audio.ChannelAudioInputSession
+import io.talkcan.audio.SemanticFeedbackEmitter
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.RecordedPcm
 import io.talkcan.channel.capability.*
@@ -384,7 +385,15 @@ class ExternalDebugChannelRuntimeContractTest {
     private fun sourceRecord() = PackageSourceRecord(GitHubRepositoryIdentity(REPOSITORY_ID), GitHubRepositoryCoordinates("talkcan-channels", "debug"), GitHubReleaseIdentity(RELEASE_ID, "v1.3.0", false), GitHubAssetIdentity(ASSET_ID, "talkcan-channel.zip"), OWNER)
     private suspend fun <T> withTemporaryDirectory(block: suspend (File) -> T): T { val root = createTempDirectory("debug-runtime-").toFile(); return try { block(root) } finally { root.deleteRecursively() } }
 
-    private object FakeSession : ChannelAudioInputSession { override val sampleRate = 16_000; override val frames = emptyFlow<ShortArray>() }
+    private object FakeSession : ChannelAudioInputSession {
+        override val sampleRate = 16_000
+        override val frames = emptyFlow<ShortArray>()
+        override val maxDurationMs = 60_000L
+        override val remainingDurationMs = 60_000L
+        override val semanticFeedbackEmitter = object : SemanticFeedbackEmitter {
+            override suspend fun emit(tone: io.talkcan.service.CaptureFeedbackTone) {}
+        }
+    }
 
     private class DebugKernelBridge : LuaKernelBridge {
         private val nextState = AtomicLong(1)
@@ -413,7 +422,7 @@ class ExternalDebugChannelRuntimeContractTest {
         override fun snapshot(handle: LuaStateHandle) = LuaKernelOutcome.Snapshot(handle.stateId.value, handle.generation.value, null, LUA_VERSION, API_VERSION, "debug-fixture")
         override fun close(handle: LuaStateHandle): LuaKernelOutcome { closedStates += handle.stateId.value; return LuaKernelOutcome.Closed(handle.stateId.value, handle.generation.value) }
         override fun loadProgramImage(handle: LuaStateHandle, entryPoint: String, sourceMap: Map<String, String>) = complete(handle, "[\"startup\",\"handle_readiness\",\"handle_input\"]")
-        override fun invokeStartupCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, config: LuaValue, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { modes[handle.stateId.value] = (((config as? LuaValue.Map)?.pairs?.get("values") as? LuaValue.Map)?.pairs?.get("mode") as? LuaValue.StringValue)?.value ?: "ECHO"; startedModes += modes[handle.stateId.value]!!; return complete(handle) }
+        override fun invokeStartupCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, config: LuaValue, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { modes[handle.stateId.value] = (((config as? LuaValue.Map)?.pairs?.get("values") as? LuaValue.Map)?.pairs?.get("mode") as? LuaValue.StringValue)?.value ?: "ECHO"; startedModes += modes[handle.stateId.value]!!; return complete(handle, "{\"input\":{\"max_duration_ms\":60000}}") }
         override fun invokeCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, arguments: LuaValue, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { val mode = modes[handle.stateId.value] ?: "ECHO"; val caps = (arguments as? LuaValue.Map)?.pairs?.get("capabilities") as? LuaValue.Map; val required = when (mode) { "ECHO", "DELAYED_ECHO" -> listOf("audio.playback"); "STT" -> listOf("audio.transcription"); "TTS" -> listOf("audio.synthesis", "audio.playback"); else -> listOf("audio.transcription", "audio.synthesis", "audio.playback") }; val ready = required.all { (caps?.pairs?.get(it) as? LuaValue.StringValue)?.value == "available" }; return complete(handle, "{\"ready\":$ready,\"status\":\"$mode\"}") }
         override fun invokeInputCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, arguments: LuaValue, capturedAudioToken: String, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { val mode = modes[handle.stateId.value] ?: "ECHO"; when (mode) { "ECHO" -> delays += 0.0; "DELAYED_ECHO" -> delays += 5.0; "STT" -> transcriptions += capturedAudioToken; "TTS" -> synthesisTexts += "Debug synthesis test"; "STT_TTS" -> { transcriptions += capturedAudioToken; synthesisTexts += "transcript" } }; return complete(handle, "{\"ok\":true}") }
         override fun startCoroutine(handle: LuaStateHandle, coroutineId: LuaCoroutineId, spawnAdmission: LuaSpawnAdmission) = complete(handle)

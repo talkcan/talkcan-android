@@ -4,6 +4,7 @@ import io.talkcan.audio.ChannelAudioInputSession
 import io.talkcan.audio.ChannelInputAcceptance
 import io.talkcan.audio.ChannelInputResult
 import io.talkcan.audio.ChannelInputTarget
+import io.talkcan.audio.CapturePolicy
 import io.talkcan.audio.RecordedPcm
 import io.talkcan.channel.capability.AgentOperationContext
 import io.talkcan.channel.capability.AudioOperationArtifact
@@ -235,6 +236,65 @@ class ChannelRuntimeRegistryTest {
     }
 
     @Test
+    fun leaseTargetOnInputCancelledAndFailedAwaitUnderlyingCallback() = runTest {
+        val provider = TestProvider(ChannelImplementationId("test:provider"))
+        val fixture = fixture(provider, callbackTimeoutMillis = 10_000)
+        val original = definition("channel", "test:provider")
+        fixture.registry.reconcile(ChannelCatalogueSnapshot(listOf(original), original.id))
+        runCurrent()
+        val runtime = provider.runtimes.single()
+        val events = mutableListOf<String>()
+        runtime.prepareResult = {
+            ChannelInputAcceptance.Accepted(object : ChannelInputTarget {
+                override val capturePolicy = CapturePolicy(60_000L)
+                override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
+
+                override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult = ChannelInputResult.None
+
+                override suspend fun onInputCancelled(reason: String) {
+                    events += "cancelled-started"
+                    delay(3000)
+                    events += "cancelled-done"
+                }
+
+                override suspend fun onInputFailed(reason: String) {
+                    events += "failed-started"
+                    delay(4000)
+                    events += "failed-done"
+                }
+            })
+        }
+        val committed = accepted(fixture.registry.prepareInput(original.id))
+
+        val cancelCall = async {
+            committed.target.onInputCancelled("test-cancel")
+        }
+        runCurrent()
+        assertEquals(listOf("cancelled-started"), events)
+        assertFalse(cancelCall.isCompleted)
+
+        advanceTimeBy(3001)
+        runCurrent()
+        assertTrue(cancelCall.isCompleted)
+        assertEquals(listOf("cancelled-started", "cancelled-done"), events)
+
+        val failCall = async {
+            committed.target.onInputFailed("test-fail")
+        }
+        runCurrent()
+        assertEquals(listOf("cancelled-started", "cancelled-done", "failed-started"), events)
+        assertFalse(failCall.isCompleted)
+
+        advanceTimeBy(4001)
+        runCurrent()
+        assertTrue(failCall.isCompleted)
+        assertEquals(listOf("cancelled-started", "cancelled-done", "failed-started", "failed-done"), events)
+
+        committed.lease.releaseCommittedTargetLease()
+        runCurrent()
+    }
+
+    @Test
     fun committedTargetSurvivesSelectionReorderReplacementAndRemovalUntilReleased() = runTest {
         val provider = TestProvider(ChannelImplementationId("test:provider"))
         val other = TestProvider(ChannelImplementationId("test:other"))
@@ -305,7 +365,8 @@ class ChannelRuntimeRegistryTest {
         runtime.onClose = { events += "runtime-closed" }
         runtime.prepareResult = {
             ChannelInputAcceptance.Accepted(object : ChannelInputTarget {
-                override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+                override val capturePolicy = CapturePolicy(60_000L)
+                override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
                 override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                     events += "release-started"
@@ -314,9 +375,9 @@ class ChannelRuntimeRegistryTest {
                     return ChannelInputResult.None
                 }
 
-                override fun onInputCancelled(reason: String) = Unit
+                override suspend fun onInputCancelled(reason: String) = Unit
 
-                override fun onInputFailed(reason: String) = Unit
+                override suspend fun onInputFailed(reason: String) = Unit
             })
         }
         val committed = accepted(fixture.registry.prepareInput(original.id))
@@ -615,7 +676,8 @@ class ChannelRuntimeRegistryTest {
         val predecessorGeneration = predecessor.scopeIdentity.runtimeGeneration.value
         predecessor.prepareResult = {
             ChannelInputAcceptance.Accepted(object : ChannelInputTarget {
-                override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+                override val capturePolicy = CapturePolicy(60_000L)
+                override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
                 override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                     events += "G:terminal-started"
@@ -624,9 +686,9 @@ class ChannelRuntimeRegistryTest {
                     return ChannelInputResult.None
                 }
 
-                override fun onInputCancelled(reason: String) = Unit
+                override suspend fun onInputCancelled(reason: String) = Unit
 
-                override fun onInputFailed(reason: String) = Unit
+                override suspend fun onInputFailed(reason: String) = Unit
             })
         }
         assertEquals(CapabilityOperationResult.Success(Unit), predecessor.emitText("before-replacement"))
@@ -878,7 +940,8 @@ class ChannelRuntimeRegistryTest {
         val predecessorGeneration = predecessor.scopeIdentity.runtimeGeneration.value
         predecessor.prepareResult = {
             ChannelInputAcceptance.Accepted(object : ChannelInputTarget {
-                override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+                override val capturePolicy = CapturePolicy(60_000L)
+                override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
                 override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult {
                     events += "G:terminal-started"
@@ -887,8 +950,8 @@ class ChannelRuntimeRegistryTest {
                     return ChannelInputResult.None
                 }
 
-                override fun onInputCancelled(reason: String) = Unit
-                override fun onInputFailed(reason: String) = Unit
+                override suspend fun onInputCancelled(reason: String) = Unit
+                override suspend fun onInputFailed(reason: String) = Unit
             })
         }
         assertEquals(
@@ -1707,15 +1770,16 @@ class ChannelRuntimeRegistryTest {
         private val events: MutableList<String>,
         private val prefix: String = "",
     ) : ChannelInputTarget {
-        override fun onInputStarted(session: ChannelAudioInputSession) = Unit
+        override val capturePolicy = CapturePolicy(60_000L)
+        override suspend fun onInputStarted(session: ChannelAudioInputSession) = Unit
 
         override suspend fun onInputReleased(recording: RecordedPcm): ChannelInputResult = ChannelInputResult.None
 
-        override fun onInputCancelled(reason: String) {
+        override suspend fun onInputCancelled(reason: String) {
             events += "cancelled:$prefix$reason"
         }
 
-        override fun onInputFailed(reason: String) {
+        override suspend fun onInputFailed(reason: String) {
             events += "failed:$prefix$reason"
         }
 

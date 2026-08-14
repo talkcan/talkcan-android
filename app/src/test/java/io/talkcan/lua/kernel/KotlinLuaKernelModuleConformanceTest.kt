@@ -722,7 +722,7 @@ class KotlinLuaKernelModuleConformanceTest {
 
         val expectedPreloaded = listOf(
             "coroutine", "math", "string", "table",
-            "talkcan.audio", "talkcan.channel", "talkcan.fs",
+            "talkcan.audio", "talkcan.channel", "talkcan.feedback", "talkcan.fs",
             "talkcan.http", "talkcan.json", "talkcan.keyboard_output",
             "talkcan.log", "talkcan.playback", "talkcan.profiles",
             "talkcan.runtime", "talkcan.secrets", "talkcan.synthesis",

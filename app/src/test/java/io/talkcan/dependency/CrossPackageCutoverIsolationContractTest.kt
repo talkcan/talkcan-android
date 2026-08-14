@@ -293,7 +293,7 @@ class CrossPackageCutoverIsolationContractTest {
                     setOf("storage.files", "audio.files", "audio.transcription"),
                     manifest.capabilities,
                 )
-                assertEquals(listOf("output_mode"), manifest.configuration.data.fields.map { it.id })
+                assertEquals(listOf("output_mode", "recording_limit_minutes"), manifest.configuration.data.fields.map { it.id })
                 val mount = manifest.resources.mounts.single()
                 assertEquals("output", mount.id)
                 assertEquals(PackageMountKind.DIRECTORY_TREE, mount.kind)
@@ -528,7 +528,7 @@ class CrossPackageCutoverIsolationContractTest {
         override fun snapshot(handle: LuaStateHandle): LuaKernelOutcome = LuaKernelOutcome.Snapshot(handle.stateId.value, handle.generation.value, null, LUA_VERSION, API_VERSION, "test")
         override fun close(handle: LuaStateHandle): LuaKernelOutcome = LuaKernelOutcome.Closed(handle.stateId.value, handle.generation.value)
         override fun loadProgramImage(handle: LuaStateHandle, entryPoint: String, sourceMap: Map<String, String>): LuaKernelOutcome = complete(handle, "[\"startup\",\"handle_readiness\",\"handle_input\"]")
-        override fun invokeStartupCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, config: LuaValue, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { invocations += 1; return complete(handle) }
+        override fun invokeStartupCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, config: LuaValue, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { invocations += 1; return complete(handle, "{\"input\":{\"max_duration_ms\":60000}}") }
         override fun invokeCallback(handle: LuaStateHandle, callbackHandle: LuaCallbackHandle, arguments: LuaValue, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome { invocations += 1; return complete(handle, "{\"ready\":false}") }
         override fun startCoroutine(handle: LuaStateHandle, coroutineId: LuaCoroutineId, spawnAdmission: LuaSpawnAdmission): LuaKernelOutcome = complete(handle)
         private fun complete(handle: LuaStateHandle, value: String? = null) = LuaKernelOutcome.Completed(handle.stateId.value, handle.generation.value, null, value, null, LUA_VERSION, API_VERSION, "test")

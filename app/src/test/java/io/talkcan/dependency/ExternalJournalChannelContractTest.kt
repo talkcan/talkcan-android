@@ -6,12 +6,15 @@ import io.talkcan.lua.LUA_VERSION
 import io.talkcan.lua.LuaCallbackHandle
 import io.talkcan.lua.LuaCoroutineId
 import io.talkcan.lua.LuaKernelBridge
+import io.talkcan.lua.kernel.KotlinLuaKernelBridge
 import io.talkcan.lua.LuaKernelConfig
 import io.talkcan.lua.LuaKernelOutcome
 import io.talkcan.lua.LuaOperationHandle
 import io.talkcan.lua.LuaPackageMaterializer
 import io.talkcan.lua.LuaSpawnAdmission
 import io.talkcan.lua.LuaStateHandle
+import io.talkcan.lua.LuaStateGeneration
+import io.talkcan.lua.LuaStateId
 import io.talkcan.lua.LuaValue
 import io.talkcan.model.ChannelConfigurationField
 import io.talkcan.model.ChannelProviderResolution
@@ -76,15 +79,22 @@ class ExternalJournalChannelContractTest {
             assertEquals(ARTIFACT_SHA256, revision.digest.value)
             assertEquals(ProviderRevisionFingerprint.fromDigest(revision.digest), revision.fingerprint)
 
+            // Pin the immutable publication identity used to source these bytes.
+            val source = sourceRecord()
+            assertEquals(RELEASE_TAG, source.release.tag)
+            assertEquals(RELEASE_ID, source.release.releaseId)
+            assertTrue(RELEASE_URL.endsWith("/$RELEASE_TAG"))
+            assertTrue(RELEASE_COMMIT.matches(Regex("[0-9a-f]{40}")))
+
             // Verify exact capabilities
             assertEquals(
                 setOf("storage.files", "audio.files", "audio.transcription"),
                 revision.manifest.capabilities
             )
 
-            // Verify exact scalar configuration schema
-            val outputModeField = revision.manifest.configuration.data.fields.single()
-            assertEquals("output_mode", outputModeField.id)
+            val configurationFields = revision.manifest.configuration.data.fields
+            assertEquals(2, configurationFields.size)
+            val outputModeField = configurationFields.single { it.id == "output_mode" }
             assertTrue(outputModeField is ConfigurationFieldDeclaration.StringField)
             val stringField = outputModeField as ConfigurationFieldDeclaration.StringField
             assertEquals("VOICE_AND_TRANSCRIPT", stringField.default)
@@ -92,6 +102,13 @@ class ExternalJournalChannelContractTest {
                 listOf("VOICE", "TRANSCRIPT", "VOICE_AND_TRANSCRIPT"),
                 stringField.allowedValues
             )
+            val recordingLimitField =
+                configurationFields.single { it.id == "recording_limit_minutes" }
+                    as? ConfigurationFieldDeclaration.IntegerField
+                    ?: throw AssertionError("recording_limit_minutes must be an integer")
+            assertEquals(5L, recordingLimitField.default)
+            assertEquals(1L, recordingLimitField.minimum)
+            assertEquals(10L, recordingLimitField.maximum)
 
             // Verify exact resource declarations
             val mounts = revision.manifest.resources.mounts
@@ -140,22 +157,28 @@ class ExternalJournalChannelContractTest {
             assertEquals("Journal directory", descriptorMount.label)
             assertEquals("Directory containing Journal entries and daily Markdown.", descriptorMount.help)
 
-            // Verify compiled configuration schema
             val descriptorFields = binding.provider.descriptor.configurationFields
-            assertEquals(1, descriptorFields.size)
-            val descriptorField = descriptorFields.single()
-            assertEquals("output_mode", descriptorField.id)
-            assertTrue(descriptorField is ChannelConfigurationField.ChoiceField)
-            val choiceField = descriptorField as ChannelConfigurationField.ChoiceField
-            assertEquals("Output mode", choiceField.label)
+            assertEquals(2, descriptorFields.size)
+            val descriptorOutputMode = descriptorFields.single { it.id == "output_mode" }
+                as? ChannelConfigurationField.ChoiceField
+                ?: throw AssertionError("output_mode must be a choice")
+            assertEquals("Output mode", descriptorOutputMode.label)
             assertEquals(
                 listOf(
                     ChannelConfigurationField.ChoiceField.Choice("VOICE", "VOICE"),
                     ChannelConfigurationField.ChoiceField.Choice("TRANSCRIPT", "TRANSCRIPT"),
                     ChannelConfigurationField.ChoiceField.Choice("VOICE_AND_TRANSCRIPT", "VOICE_AND_TRANSCRIPT")
                 ),
-                choiceField.choices
+                descriptorOutputMode.choices
             )
+            val descriptorRecordingLimit =
+                descriptorFields.single { it.id == "recording_limit_minutes" }
+                    as? ChannelConfigurationField.NumberField
+                    ?: throw AssertionError("recording_limit_minutes must be a number")
+            assertEquals("Recording limit (minutes)", descriptorRecordingLimit.label)
+            assertEquals("Maximum duration of one recording.", descriptorRecordingLimit.help)
+            assertEquals(1L, descriptorRecordingLimit.minimum)
+            assertEquals(10L, descriptorRecordingLimit.maximum)
 
             // Verify no Lua state was constructed during validation/materialization
             assertEquals(0, bridge.created)
@@ -250,6 +273,96 @@ class ExternalJournalChannelContractTest {
         }
     }
 
+    @Test
+    fun `exact Journal warning tasks yield their configured sleep durations in the native kernel`() =
+        withTemporaryDirectory { root ->
+            val revision = success(
+                PackageValidator.validatePackage(
+                    ByteArrayInputStream(fixture()),
+                    sourceRecord(),
+                    File(root, "native-kernel.zip"),
+                ),
+            )
+            val bridge: LuaKernelBridge = KotlinLuaKernelBridge()
+            val created = bridge.create(
+                LuaKernelConfig(hookInterval = 100, instructionBudget = 10_000_000),
+            ) as? LuaKernelOutcome.Created
+                ?: throw AssertionError("native kernel state creation failed")
+            val handle = LuaStateHandle(
+                LuaStateId(created.stateId),
+                LuaStateGeneration(created.generation),
+            )
+            try {
+                assertTrue(
+                    bridge.loadProgramImage(
+                        handle,
+                        revision.programImage.entryPoint,
+                        revision.sourceMap,
+                    ) is LuaKernelOutcome.Completed,
+                )
+                val startupAdmission = RecordingSpawnAdmission()
+                val startup = bridge.invokeStartupCallback(
+                    handle,
+                    LuaCallbackHandle(handle, "startup"),
+                    LuaValue.Map(
+                        mapOf(
+                            "schema_version" to LuaValue.Integer(1),
+                            "values" to LuaValue.Map(
+                                mapOf(
+                                    "output_mode" to LuaValue.StringValue("VOICE_AND_TRANSCRIPT"),
+                                    "recording_limit_minutes" to LuaValue.Integer(1),
+                                ),
+                            ),
+                        ),
+                    ),
+                    startupAdmission,
+                )
+                assertTrue("startup failed: $startup", startup is LuaKernelOutcome.Completed)
+
+                val warningAdmission = RecordingSpawnAdmission()
+                val lifecycle = bridge.invokeCallback(
+                    handle,
+                    LuaCallbackHandle(handle, "handle_capture_lifecycle"),
+                    LuaValue.Map(
+                        mapOf(
+                            "event" to LuaValue.StringValue("capture_started"),
+                            "session" to LuaValue.StringValue("native-warning-test"),
+                            "max_duration_ms" to LuaValue.Integer(60_000),
+                            "remaining_duration_ms" to LuaValue.Integer(60_000),
+                        ),
+                    ),
+                    warningAdmission,
+                )
+                assertTrue("capture lifecycle failed: $lifecycle", lifecycle is LuaKernelOutcome.Completed)
+                assertEquals(2, warningAdmission.coroutineIds.size)
+
+                val yieldedLabels = warningAdmission.coroutineIds.map { coroutineId ->
+                    val outcome = bridge.startCoroutine(
+                        handle,
+                        LuaCoroutineId(coroutineId),
+                        RecordingSpawnAdmission(),
+                    ) as? LuaKernelOutcome.Yielded
+                        ?: throw AssertionError("warning task did not yield")
+                    outcome.value ?: throw AssertionError("warning task yielded without a label")
+                }
+                assertEquals(
+                    setOf(45.0, 57.0),
+                    yieldedLabels.map { it.substringAfterLast(':').toDouble() }.toSet(),
+                )
+            } finally {
+                bridge.close(handle)
+            }
+        }
+
+    private class RecordingSpawnAdmission : LuaSpawnAdmission {
+        val coroutineIds = mutableListOf<Long>()
+
+        override fun admitTask(coroutineId: Long): Int {
+            coroutineIds += coroutineId
+            return 0
+        }
+    }
+
     private class CountingBridge : LuaKernelBridge {
         var created = 0
         var loads = 0
@@ -339,11 +452,15 @@ class ExternalJournalChannelContractTest {
     private companion object {
         const val RESOURCE_PATH = "journal-channel/talkcan-channel.zip"
         const val REPOSITORY_ID = "1313912742"
-        const val RELEASE_ID = "360293138"
-        const val ASSET_ID = "491214391"
+        const val RELEASE_ID = "370507991"
+        const val ASSET_ID = "514295711"
         const val OFFICIAL_OWNER_ID = "1224006"
-        const val PACKAGE_VERSION = "2.0.0"
-        const val ARTIFACT_SIZE = 69733
-        const val ARTIFACT_SHA256 = "10cb052c077116d41f2936ea8574165a57d5bb617fb1eee9f7971984b9372c5e"
+        const val PACKAGE_VERSION = "2.1.0"
+        const val RELEASE_TAG = "v2.1.0"
+        const val RELEASE_URL =
+            "https://github.com/talkcan-channels/journal/releases/tag/v2.1.0"
+        const val RELEASE_COMMIT = "fdd7ff949c7c29bd2db2994ae76cf4a1a382d9eb"
+        const val ARTIFACT_SIZE = 72602
+        const val ARTIFACT_SHA256 = "01f43ba266eb634766316fd39e97b8e5baa10cbd1db69b249674fd265de0f532"
     }
 }

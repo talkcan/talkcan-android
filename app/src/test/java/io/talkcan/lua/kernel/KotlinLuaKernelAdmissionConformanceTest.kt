@@ -1943,4 +1943,75 @@ class KotlinLuaKernelAdmissionConformanceTest {
         assertTrue("q must be nil", v.getBoolean("q_nil"))
         assertEquals("E_INVALID_CONTEXT", v.getString("error_code"))
     }
+
+    @Test
+    fun `feedback_emit_conformance`() {
+        val handle = s.createState(s.channelConfig())
+        s.loadProgramImageOk(
+            handle,
+            "entry",
+            mapOf("entry" to """
+                local f = require("talkcan.feedback")
+                return {
+                  startup = function() end,
+                  outside = function()
+                    local x, e = f.emit("recording_limit_warning")
+                    return { ok = (x == true), error_code = e and e.error or "none" }
+                  end,
+                  get_constants = function()
+                    return {
+                      warning = f.RECORDING_LIMIT_WARNING,
+                      final = f.RECORDING_LIMIT_FINAL,
+                    }
+                  end,
+                  emit_no_args = function()
+                    local x, e = f.emit()
+                    return { ok = (x == true), error_code = e and e.error or "none" }
+                  end,
+                  emit_non_string = function()
+                    local x, e = f.emit(123)
+                    return { ok = (x == true), error_code = e and e.error or "none" }
+                  end,
+                  emit_unknown_constant = function()
+                    local x, e = f.emit("unknown_beep")
+                    return { ok = (x == true), error_code = e and e.error or "none" }
+                  end,
+                  emit_extra_args = function()
+                    local x, e = f.emit("recording_limit_warning", "extra")
+                    return { ok = (x == true), error_code = e and e.error or "none" }
+                  end,
+                  handle_input = function()
+                    local x, e = f.emit("recording_limit_warning")
+                    return { ok = (x == true), error_code = e and e.error or "none" }
+                  end,
+                }
+            """.trimIndent()),
+        )
+
+        // Verify constants
+        val constants = resultJson(s.invokeCallback(handle, "get_constants"))
+        assertEquals("recording_limit_warning", constants.getString("warning"))
+        assertEquals("recording_limit_final", constants.getString("final"))
+
+        // Verify invalid argument cases
+        val noArgs = resultJson(s.invokeCallback(handle, "emit_no_args"))
+        assertEquals("E_INVALID_ARGUMENT", noArgs.getString("error_code"))
+
+        val nonString = resultJson(s.invokeCallback(handle, "emit_non_string"))
+        assertEquals("E_INVALID_ARGUMENT", nonString.getString("error_code"))
+
+        val unknownConst = resultJson(s.invokeCallback(handle, "emit_unknown_constant"))
+        assertEquals("E_INVALID_ARGUMENT", unknownConst.getString("error_code"))
+
+        val extraArgs = resultJson(s.invokeCallback(handle, "emit_extra_args"))
+        assertEquals("E_INVALID_ARGUMENT", extraArgs.getString("error_code"))
+
+        // Outside context: must fail with E_INVALID_CONTEXT
+        val outside = resultJson(s.invokeCallback(handle, "outside"))
+        assertEquals("E_INVALID_CONTEXT", outside.getString("error_code"))
+
+        // Inside input context: also fails with E_INVALID_CONTEXT
+        val inside = resultJson(invokeInput(handle))
+        assertEquals("E_INVALID_CONTEXT", inside.getString("error_code"))
+    }
 }

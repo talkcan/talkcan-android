@@ -1,6 +1,8 @@
 package io.talkcan.audio
 
 import android.media.AudioAttributes
+import io.talkcan.service.CaptureFeedbackTone
+import io.talkcan.service.TalkcanLogger
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -78,6 +80,36 @@ class AndroidPcmOutput(
         )
     }
 
+    override suspend fun playCaptureFeedback(tone: CaptureFeedbackTone) {
+        val device = communicationDeviceForPlayback()
+        val sampleRate = 16_000
+        val samples = when (tone) {
+            CaptureFeedbackTone.RecordingLimitWarning ->
+                CaptureFeedbackToneGenerator.generateWarningTones(sampleRate)
+            CaptureFeedbackTone.RecordingLimitFinal ->
+                CaptureFeedbackToneGenerator.generateFinalTone(sampleRate)
+        }
+        TalkcanLogger.d(
+            FEEDBACK_LOG_TAG,
+            "PLAY_BEGIN tone=$tone device=${device?.id}:${device?.type} samples=${samples.size}",
+        )
+        try {
+            playStaticPcm(
+                samples = samples,
+                sampleRate = sampleRate,
+                contentType = AudioAttributes.CONTENT_TYPE_SONIFICATION,
+                preferredDevice = device,
+            )
+            TalkcanLogger.d(FEEDBACK_LOG_TAG, "PLAY_SUCCESS tone=$tone")
+        } catch (failure: Throwable) {
+            TalkcanLogger.w(
+                FEEDBACK_LOG_TAG,
+                "PLAY_FAILURE tone=$tone type=${failure.javaClass.simpleName}",
+            )
+            throw failure
+        }
+    }
+
     private fun communicationDeviceForPlayback(): AudioDeviceInfo? {
         val device = communicationDevice()
         if (!requireActiveScoCommunicationDevice) {
@@ -118,13 +150,24 @@ class AndroidPcmOutput(
             .build()
 
         if (preferredDevice != null) {
-            track.setPreferredDevice(preferredDevice)
+            val accepted = track.setPreferredDevice(preferredDevice)
+            TalkcanLogger.d(
+                FEEDBACK_LOG_TAG,
+                "ROUTE_PREFERENCE accepted=$accepted device=${preferredDevice.id}:${preferredDevice.type}",
+            )
         }
 
+        val durationMs = samples.size * 1_000L / sampleRate
+
         try {
-            track.write(samples, 0, samples.size)
+            val written = track.write(samples, 0, samples.size)
+            check(written == samples.size) {
+                "AudioTrack wrote $written of ${samples.size} samples"
+            }
             track.play()
-            val durationMs = samples.size * 1_000L / sampleRate
+            check(track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                "AudioTrack did not enter PLAYSTATE_PLAYING"
+            }
             delay(durationMs + 50)
         } finally {
             runCatching { track.stop() }
@@ -143,6 +186,10 @@ class AndroidPcmOutput(
             val phase = 2.0 * PI * frequencyHz * index / sampleRate
             (sin(phase) * Short.MAX_VALUE * amplitude).toInt().toShort()
         }
+    }
+
+    private companion object {
+        const val FEEDBACK_LOG_TAG = "TalkcanFeedback"
     }
 }
 

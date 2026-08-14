@@ -100,6 +100,19 @@ internal class LuaHostRequestBroker(
                 reasonJson = workJson(readValue(2)),
             )
         },
+        "host_feedback_emit" to requestCallback { requestId ->
+            val toneStr = callbackLua.toString(1)
+            val tone = when (toneStr) {
+                "recording_limit_warning" -> io.talkcan.service.CaptureFeedbackTone.RecordingLimitWarning
+                "recording_limit_final" -> io.talkcan.service.CaptureFeedbackTone.RecordingLimitFinal
+                else -> reject("E_INVALID_ARGUMENT", HostOperationKind.AUDIO_FEEDBACK)
+            }
+            admitted(
+                requestId,
+                HostOperationKind.AUDIO_FEEDBACK,
+                feedbackTone = tone,
+            )
+        },
     )
 
     private fun requestCallback(
@@ -535,6 +548,7 @@ internal class LuaHostRequestBroker(
         voice: String? = null,
         speed: Double = 0.0,
         delaySeconds: Double = 0.0,
+        feedbackTone: io.talkcan.service.CaptureFeedbackTone? = null,
         declarationId: String? = null,
         mountToken: String? = null,
         path: String? = null,
@@ -570,6 +584,7 @@ internal class LuaHostRequestBroker(
         voice = voice,
         speed = speed,
         delaySeconds = delaySeconds,
+        feedbackTone = feedbackTone,
         declarationId = declarationId,
         mountToken = mountToken,
         path = path,
