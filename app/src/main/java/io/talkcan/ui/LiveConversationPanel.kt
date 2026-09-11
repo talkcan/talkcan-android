@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,30 +21,13 @@ import androidx.compose.ui.unit.dp
 import io.talkcan.live.LiveConversationView
 import io.talkcan.live.LiveSessionPhase
 
-/**
- * Full-duplex live conversation control and transcript view.
- *
- * There is no push-to-talk here: the microphone stays open for the whole
- * session. Tapping transcript text only selects it for copy; it never
- * transmits. Transcript labels describe on-screen text only and never claim a
- * backend result was spoken aloud.
- */
+/** Channel-local review of the current or last full-duplex conversation. */
 @Composable
 fun LiveConversationPanel(
     view: LiveConversationView,
-    targetName: String?,
-    onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val phase = view.state.phase
-    val running = view.isRunning
-    // CONNECTING stays cancellable; CLOSING never interrupts a close.
-    val toggleEnabled = when (phase) {
-        LiveSessionPhase.CLOSING -> false
-        else -> running || targetName != null
-    }
-    val toggleLabel = if (running) "End live" else "Start live"
-    val channelLabel = (if (running) view.channelName else targetName) ?: "No channel selected"
     val statusLabel = when (phase) {
         LiveSessionPhase.IDLE -> "Idle"
         LiveSessionPhase.CONNECTING -> "Connecting…"
@@ -71,8 +52,8 @@ fun LiveConversationPanel(
 
     TalkcanInstrumentPanel(modifier = modifier) {
         TalkcanSectionHeader(
-            title = "Live conversation",
-            supportingText = channelLabel,
+            title = "Conversation",
+            supportingText = view.channelName.orEmpty(),
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -91,40 +72,6 @@ fun LiveConversationPanel(
                 modifier = Modifier.weight(1f),
             )
         }
-        if (running) {
-            Button(
-                onClick = onToggle,
-                enabled = toggleEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("liveToggleButton"),
-            ) {
-                Text(toggleLabel)
-            }
-        } else {
-            OutlinedButton(
-                onClick = onToggle,
-                enabled = toggleEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("liveToggleButton"),
-            ) {
-                Text(toggleLabel)
-            }
-        }
-        if (!running && targetName == null) {
-            Text(
-                text = "Choose an SOS live channel in Settings to start.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Text(
-            text = "No push-to-talk: the microphone stays open during the session. " +
-                "Tapping text selects it; it does not transmit.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         if (phase == LiveSessionPhase.FAILED) {
             Row(

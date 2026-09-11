@@ -10,14 +10,21 @@ All notable changes to Talkcan are documented in this file.
   Lua input channels.
 - Added semantic warning tones that play through the active capture route
   before a recording reaches its limit.
-- Added a GPT-Live full-duplex capability and channel with SOS start/stop,
-  continuous microphone audio, transcripts, and a notification stop action.
-- Added encrypted API-key settings and a separate SOS channel assignment.
+- Added a native GPT-Live full-duplex channel with continuous microphone
+  audio, channel-local transcripts, and a notification stop action.
+- Added encrypted API-key settings inside GPT-Live channel settings.
 - Added permission-controlled channel switching and mounted text-file reads
   through bounded GPT-Live backend tools.
 
 ### Changed
 
+- Unified Talk controls: hold and release for half-duplex channels, click
+  to start or stop full-duplex conversations.
+- Made long SOS a held priority interaction for either duplex mode without
+  changing regular channel selection. It ends regular conversations and
+  never resumes them automatically.
+- Moved conversation status, transcripts, and errors inside their channel.
+  Priority-channel assignment remains a separate app setting.
 - Added the approved industrial visual system to the main dashboard. It uses
   graphite surfaces, aluminum copy, amber voice routes, and cyan status.
 - Added reusable instrument panels, route-status badges, technical typography,

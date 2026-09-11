@@ -358,9 +358,13 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     private lateinit var liveSettingsRepository: io.talkcan.live.LiveSettingsRepository
     private lateinit var liveConversationManager: ServiceLiveConversationManager
     private val liveToggleMutex = kotlinx.coroutines.sync.Mutex()
+    private lateinit var priorityTalk: PriorityTalkController
+    private var sosLongHeld = false
+    val priorityChannelState: StateFlow<String?> get() = priorityTalk.target
     @Volatile private var destroyingService = false
     val liveSettingsState: StateFlow<io.talkcan.live.LiveSettingsState> get() = liveSettingsRepository.state
     val liveConversationState: StateFlow<io.talkcan.live.LiveConversationView> get() = liveConversationManager.view
+    val channelConversations: StateFlow<Map<String, io.talkcan.live.LiveConversationView>> get() = liveConversationManager.conversations
     private lateinit var scanner: DeviceScanner
     private lateinit var channelRepository: ChannelRepository
     private lateinit var channelManager: ServiceChannelManager
@@ -1064,6 +1068,41 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
             logAudioRouteSnapshot = ::logAudioRouteSnapshot,
             updateCarMediaState = ::updateCarMediaState,
         )
+        priorityTalk = PriorityTalkController(
+            scope = serviceScope,
+            prepare = {
+                hostAudioCoordinator.setPriorityHeld(true)
+                liveToggleMutex.withLock { liveConversationManager.closeCurrent() }
+                pttDispatcher.activePttSession?.let {
+                    pttDispatcher.dispatchPttReleased(it.source)
+                }
+                hostAudioCoordinator.consumeSosDuringPlayback()
+                withTimeoutOrNull(10_000) {
+                    while (pttDispatcher.activePttSession != null || hostAudioCoordinator.isPlaybackActive.value) delay(10)
+                    true
+                } == true
+            },
+            start = { id ->
+                if (isFullDuplex(id)) {
+                    if (inputModeController.autoTransitionFor(PttSource.Rsm)) {
+                        publishInputMode()
+                        liveToggleMutex.withLock { startChannelConversation(id) }
+                    }
+                } else {
+                    decidePttDispatch(runtimeRegistry.runtimeSnapshots.value, id)
+                        ?.let { pttDispatcher.dispatchPttPressed(PttSource.Rsm, it) }
+                }
+            },
+            stop = {
+                liveToggleMutex.withLock { liveConversationManager.closeCurrent() }
+                pttDispatcher.dispatchPttReleased(PttSource.Rsm)
+            },
+            onFinished = {
+                hostAudioCoordinator.setPriorityHeld(false)
+                deferredAudioPlayback.onAudioAvailable()
+                serviceScope.launch { onLiveConversationStopped() }
+            },
+        )
         serviceScope.launch {
             textOutputService.availability.collect { availability ->
                 val monitorState = when (availability) {
@@ -1174,7 +1213,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
             refreshReadiness = ::refreshReadiness,
             monitoringRequested = { serialCoordinator.monitoringRequested },
             readyForMonitor = { stateProjector.snapshot().readyForMonitor },
-            hasActivePttSession = { pttDispatcher.activePttSession != null || liveConversationManager.hasSession },
+            hasActivePttSession = { pttDispatcher.activePttSession != null || liveConversationManager.hasSession || priorityTalk.target.value != null },
             refreshIntervalMs = READINESS_REFRESH_INTERVAL_MS,
         )
         serviceScope.launch {
@@ -1271,36 +1310,44 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
         }
     }
 
-    fun toggleLiveConversation() {
+    private fun isFullDuplex(channelId: String?): Boolean {
+        val definition = channelRepository.catalogueState.value.definitions.firstOrNull { it.id == channelId } ?: return false
+        val descriptor = providerRegistry.resolveDescriptor(definition.implementationId)
+            as? io.talkcan.model.ChannelDescriptorResolution.Available
+        return descriptor?.descriptor?.interactionMode == io.talkcan.model.ChannelInteractionMode.FULL_DUPLEX
+    }
+
+    fun toggleLiveConversation(source: PttSource = PttSource.Phone) {
+        if (priorityTalk.target.value != null) return
         serviceScope.launch {
             liveToggleMutex.withLock {
+                if (priorityTalk.target.value != null) return@withLock
                 if (liveConversationManager.hasSession) {
                     liveConversationManager.closeCurrent()
-                    return@withLock
-                }
-                val catalogue = channelRepository.catalogueState.value
-                val targetId = liveSettingsRepository.state.value.sosChannelId ?: catalogue.activeChannelId
-                val target = catalogue.definitions.firstOrNull { it.id == targetId }
-                if (target?.enabled != true || target.implementationId != io.talkcan.live.GptLiveChannelProvider.ID) {
-                    liveConversationManager.reportUnavailable("Choose an enabled GPT-Live SOS channel in Settings.")
-                    onLiveConversationStopped()
-                    return@withLock
-                }
-                val result = runtimeRegistry.dispatchSos(target.id)
-                if (!liveConversationManager.hasSession) {
-                    val message = (result as? ChannelPreparationAvailability.Unavailable)?.reason?.message
-                        ?: "Could not start GPT-Live. Check its API key and audio route."
-                    liveConversationManager.reportUnavailable(message)
-                    onLiveConversationStopped()
+                } else {
+                    val target = channelRepository.catalogueState.value.activeChannelId
+                    if (isFullDuplex(target) && inputModeController.autoTransitionFor(source)) {
+                        publishInputMode()
+                        startChannelConversation(checkNotNull(target))
+                    }
                 }
             }
+        }
+    }
+
+    private suspend fun startChannelConversation(channelId: String) {
+        val result = runtimeRegistry.dispatchSos(channelId)
+        if (!liveConversationManager.hasSession) {
+            val message = (result as? ChannelPreparationAvailability.Unavailable)?.reason?.message
+                ?: "Could not start conversation. Check the channel settings and audio device."
+            liveConversationManager.reportUnavailable(channelId, message)
         }
     }
 
     private suspend fun onLiveConversationStopped() {
         if (destroyingService) return
         withContext(Dispatchers.Main.immediate) {
-            if (destroyingService || liveConversationManager.hasSession) return@withContext
+            if (destroyingService || liveConversationManager.hasSession || priorityTalk.target.value != null) return@withContext
             deferredAudioPlayback.onAudioAvailable()
             if (!serialCoordinator.monitoringRequested && pttDispatcher.activePttSession == null) {
                 foregroundCoordinator.stopForegroundIfNeeded()
@@ -1343,6 +1390,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
 
     override fun onDestroy() {
         destroyingService = true
+        priorityTalk.release()
         runBlocking {
             withContext(Dispatchers.Default) {
                 withTimeoutOrNull(45_000L) {
@@ -1632,7 +1680,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     }
 
     fun startPhonePtt(channelId: String): Boolean {
-        if (!selectChannel(channelId)) return false
+        if (priorityTalk.target.value != null || channelRepository.catalogueState.value.activeChannelId != channelId) return false
         TalkcanLogger.d(ROUTE_LOG_TAG, "PHONE_PTT_PRESSED channel=$channelId")
         logAudioRouteSnapshot("phone-ptt-pressed")
         return pttDispatcher.dispatchPttPressed(PttSource.Phone)
@@ -1819,7 +1867,10 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
 
     override fun onCarPttStart() {
         cancelIdleTimer()
-        carTelecomStarter.startTelecomCarPtt()
+        if (priorityTalk.target.value != null) return
+        if (isFullDuplex(channelRepository.catalogueState.value.activeChannelId)) {
+            toggleLiveConversation(PttSource.CarTelecom)
+        } else carTelecomStarter.startTelecomCarPtt()
     }
 
     override fun onCarPttRelease() {
@@ -1827,7 +1878,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     }
 
     override fun onTelecomCaptureStart() {
-        pttDispatcher.dispatchPttPressed(PttSource.CarTelecom)
+        if (priorityTalk.target.value == null) pttDispatcher.dispatchPttPressed(PttSource.CarTelecom)
     }
 
     override fun onTelecomCaptureStop() {
@@ -1909,21 +1960,31 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
                     selectChannel(stateProjector.snapshot().activeChannelId.orEmpty())
                     announcementCoordinator.announce("chan.${stateProjector.snapshot().activeChannelId.orEmpty()}.selected")
                 } else {
-                    pttDispatcher.dispatchPttPressed(PttSource.Rsm)
-                }
-            }
-            RawButtonEvent.PttReleased -> pttDispatcher.dispatchPttReleased(PttSource.Rsm)
-            RawButtonEvent.SosPressed -> {
-                if (liveConversationManager.hasSession || liveSettingsRepository.state.value.sosChannelId != null ||
-                    stateProjector.snapshot().channels.firstOrNull { it.id == stateProjector.snapshot().activeChannelId }
-                        ?.implementationId == io.talkcan.live.GptLiveChannelProvider.ID
-                ) {
-                    toggleLiveConversation()
-                } else serviceScope.launch {
-                    if (hostAudioCoordinator.consumeSosDuringPlayback() is HostSosDisposition.DispatchToChannel) {
-                        runtimeRegistry.dispatchSos(stateProjector.snapshot().activeChannelId.orEmpty())
+                    if (priorityTalk.target.value == null) {
+                        if (isFullDuplex(channelRepository.catalogueState.value.activeChannelId)) {
+                            toggleLiveConversation(PttSource.Rsm)
+                        } else pttDispatcher.dispatchPttPressed(PttSource.Rsm)
                     }
                 }
+            }
+            RawButtonEvent.PttReleased -> {
+                if (priorityTalk.target.value == null) pttDispatcher.dispatchPttReleased(PttSource.Rsm)
+            }
+            RawButtonEvent.SosPressed -> sosLongHeld = false
+            RawButtonEvent.SosLongPressed -> {
+                sosLongHeld = true
+                liveSettingsRepository.state.value.sosChannelId?.let { priorityTalk.press(it) }
+            }
+            RawButtonEvent.SosReleased -> {
+                if (sosLongHeld) {
+                    priorityTalk.release()
+                } else serviceScope.launch {
+                    if (hostAudioCoordinator.consumeSosDuringPlayback() is HostSosDisposition.DispatchToChannel) {
+                        val id = stateProjector.snapshot().activeChannelId.orEmpty()
+                        if (!isFullDuplex(id)) runtimeRegistry.dispatchSos(id)
+                    }
+                }
+                sosLongHeld = false
             }
             else -> Unit
         }
@@ -1965,11 +2026,14 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
 
     private fun handleSerialCoordinatorEvent(event: SerialCoordinatorEvent) {
         when (event) {
-            is SerialCoordinatorEvent.CancelPtt -> pttDispatcher.cancelPttBySource(
-                source = PttSource.Rsm,
-                caller = event.caller,
-                reason = event.reason,
-            )
+            is SerialCoordinatorEvent.CancelPtt -> {
+                priorityTalk.release()
+                pttDispatcher.cancelPttBySource(
+                    source = PttSource.Rsm,
+                    caller = event.caller,
+                    reason = event.reason,
+                )
+            }
             SerialCoordinatorEvent.ReleaseTts -> serviceScope.launch {
                 coreInitializer.ttsController?.cancelAndRelease()
             }

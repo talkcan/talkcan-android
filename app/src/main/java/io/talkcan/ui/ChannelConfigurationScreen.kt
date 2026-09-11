@@ -74,6 +74,7 @@ fun ChannelConfigurationScreen(
     synthesisVoiceChoices: List<ChannelSynthesisVoiceChoice> = emptyList(),
     initialSynthesisVoiceProfileId: String? = null,
     onCommitWithVoice: ((OpaqueJsonObject, String?, Boolean) -> ChannelConfigurationSubmitResult)? = null,
+    accountContent: @Composable () -> Unit = {},
 ) {
     val initialValues = remember(descriptor, initialPayload) {
         val payload = initialPayload.toJsonObject()
@@ -113,6 +114,7 @@ fun ChannelConfigurationScreen(
             title = title,
             subtitle = "Review and adjust the settings below, then save your changes.",
         )
+        accountContent()
 
         if (descriptor.configurationFields.isEmpty()) {
             Card(

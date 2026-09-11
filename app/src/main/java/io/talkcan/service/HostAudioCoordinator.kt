@@ -41,6 +41,11 @@ internal class HostAudioCoordinator(
     private var owner: Owner? = null
     private var activePlayback: ActivePcmPlayback? = null
     private var rejectedPressPendingRelease = false
+    private var priorityHeld = false
+
+    fun setPriorityHeld(held: Boolean) = synchronized(lock) {
+        priorityHeld = held
+    }
 
     private val _isPlaybackActive = MutableStateFlow(false)
     val isPlaybackActive: StateFlow<Boolean> = _isPlaybackActive.asStateFlow()
@@ -48,9 +53,10 @@ internal class HostAudioCoordinator(
      * This is intentionally synchronous: PTT ingress must reject playback before the protected
      * dispatcher can auto-transition the mode or reserve an input session.
      */
-    fun reserveCapture(): HostCaptureAdmission {
+    fun reserveCapture(priority: Boolean = false): HostCaptureAdmission {
         val (playback, admission) = synchronized(lock) {
             if (closed) return@synchronized null to HostCaptureAdmission.Closed
+            if (priorityHeld && !priority) return@synchronized null to HostCaptureAdmission.Busy
             when (owner) {
                 null -> {
                     val lease = HostCaptureLease(newOperationId())
@@ -124,7 +130,7 @@ internal class HostAudioCoordinator(
     ): HostPlaybackResult {
         val operation = synchronized(lock) {
             if (closed) return HostPlaybackResult.Closed
-            if (owner != null) return HostPlaybackResult.Busy
+            if (owner != null || priorityHeld) return HostPlaybackResult.Busy
             Owner.Playback(newOperationId(), kind).also {
                 owner = it
                 _isPlaybackActive.value = true

@@ -7,6 +7,20 @@ import org.junit.Test
 
 class PttDispatchDecisionTest {
     @Test
+    fun `priority capture addresses its own channel without changing regular selection`() {
+        val snapshot = RuntimeRegistrySnapshot(
+            activeChannelId = "regular",
+            entries = listOf(
+                runtimeSnapshot("regular", ChannelPreparationAvailability.Available),
+                runtimeSnapshot("priority", ChannelPreparationAvailability.Available),
+            ),
+        )
+        assertEquals(PttDispatchDecision.Dispatch("priority"), decidePttDispatch(snapshot, "priority"))
+        assertEquals(PttDispatchDecision.Dispatch("regular"), decidePttDispatch(snapshot))
+        assertEquals(PttDispatchDecision.ErrorBeep("removed"), decidePttDispatch(snapshot, "removed"))
+    }
+
+    @Test
     fun `PTT admission depends only on active instance preparation availability`() {
         data class Case(
             val name: String,

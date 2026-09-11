@@ -81,13 +81,13 @@ internal class PttDispatcher(
         return true
     }
 
-    fun dispatchPttPressed(source: PttSource): Boolean {
+    fun dispatchPttPressed(source: PttSource, targetDecision: PttDispatchDecision? = null): Boolean {
         val pendingSameSource = activePttSession?.source == source
         val captureLease = if (pendingSameSource) {
             null
         } else {
             preemptPreviewForOperationalAudio()
-            when (val admission = audioCoordinator.reserveCapture()) {
+            when (val admission = audioCoordinator.reserveCapture(priority = targetDecision != null)) {
                 is HostCaptureAdmission.Granted -> admission.lease
                 HostCaptureAdmission.RejectedByPlayback -> {
                     Log.d(ROUTE_LOG_TAG, "PTT_PRESS_SKIP source=$source reason=playback-active")
@@ -130,7 +130,7 @@ internal class PttDispatcher(
         }
         publishInputMode()
         cancelIdleTimer()
-        val decision = decidePttDispatch()
+        val decision = targetDecision ?: decidePttDispatch()
 
         Log.d(ROUTE_LOG_TAG, "PTT_DECIDE decision=${decision?.let { it::class.simpleName }} channel=${decision?.channelId}")
         if (decision == null) {

@@ -34,16 +34,7 @@ import androidx.compose.ui.unit.dp
 import io.talkcan.live.LiveSettingsState
 import io.talkcan.model.ChannelDefinition
 
-private const val LIVE_PROVIDER_ID = "builtin:gpt-live"
-
-/**
- * Settings for the GPT-Live full-duplex SOS voice channel.
- *
- * The API key field is intentionally process-memory only ([remember], never
- * `rememberSaveable`) and write-only: blank on save keeps the stored secret,
- * and the field is cleared after submission. Nothing entered here is echoed,
- * logged, or copied anywhere else.
- */
+/** Priority-channel setup, or the account section embedded in a GPT-Live channel. */
 @Composable
 fun LiveSettingsScreen(
     state: LiveSettingsState,
@@ -51,6 +42,7 @@ fun LiveSettingsScreen(
     onSave: (apiKey: String, sosChannelId: String?) -> Unit,
     onClearKey: () -> Unit,
     modifier: Modifier = Modifier,
+    keyOnly: Boolean = false,
 ) {
     // Deliberately NOT rememberSaveable: the key must not survive process death
     // in saved instance state.
@@ -60,7 +52,7 @@ fun LiveSettingsScreen(
     var confirmClear by remember { mutableStateOf(false) }
 
     val liveChoices = remember(channels) {
-        channels.filter { it.implementationId.value == LIVE_PROVIDER_ID && it.enabled }
+        channels.filter { it.enabled }
     }
     val missingSavedId = state.sosChannelId?.takeIf { saved ->
         liveChoices.none { it.id == saved }
@@ -72,17 +64,16 @@ fun LiveSettingsScreen(
     }
     Column(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .then(if (keyOnly) Modifier else Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TerminalHeader(
-            title = "Live voice",
-            subtitle = "Full-duplex SOS voice (GPT-Live).",
+            title = if (keyOnly) "OpenAI account" else "Priority channel",
+            subtitle = if (keyOnly) "Used by GPT-Live channels." else "Hold SOS to talk without changing your regular channel.",
         )
 
-        TalkcanInstrumentPanel {
+        if (keyOnly) TalkcanInstrumentPanel {
             TalkcanSectionHeader(
                 title = "Voice API key",
                 supportingText = "Use your own key. It is stored encrypted on this device and never bundled or shared.",
@@ -138,26 +129,25 @@ fun LiveSettingsScreen(
             }
         }
 
-        TalkcanInstrumentPanel {
+        if (!keyOnly) TalkcanInstrumentPanel {
             TalkcanSectionHeader(
-                title = "SOS live channel",
-                supportingText = "Pressing SOS starts a live session on this channel without changing your active regular channel.",
+                title = "SOS priority channel",
+                supportingText = "Long-press SOS to talk to this channel. Release to finish.",
             )
             Text(
-                text = "Create live channels in Channel management. Each channel sets its own app-control " +
-                    "and content permissions in its configuration.",
+                text = "SOS ends any running regular conversation. Releasing SOS does not restart it.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("SOS channel", style = MaterialTheme.typography.bodyLarge)
+                Text("Priority channel", style = MaterialTheme.typography.bodyLarge)
                 OutlinedButton(
                     onClick = { expanded = true },
                     enabled = !state.saving,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("liveSosChannelButton")
-                        .semantics { contentDescription = "SOS live channel: $selectedLabel" },
+                        .semantics { contentDescription = "Priority channel: $selectedLabel" },
                 ) {
                     Text(selectedLabel)
                 }
@@ -195,11 +185,14 @@ fun LiveSettingsScreen(
                     )
                 } else if (liveChoices.isEmpty()) {
                     Text(
-                        text = "No enabled live channels yet. Add one in Channel management.",
+                        text = "No enabled channels yet. Add one in Channel management.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+            Button(onClick = { onSave("", selectedId) }, enabled = !state.saving) {
+                Text(if (state.saving) "Saving…" else "Save")
             }
         }
 

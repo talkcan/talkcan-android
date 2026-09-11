@@ -160,10 +160,10 @@ class MainActivity : ComponentActivity() {
                 ?: remember { mutableStateOf(io.talkcan.live.LiveSettingsState()) }
             val liveConversation by currentService?.liveConversationState?.collectAsStateWithLifecycle()
                 ?: remember { mutableStateOf(io.talkcan.live.LiveConversationView()) }
-            val liveTargetId = liveSettings.sosChannelId ?: catalogue?.activeChannelId
-            val liveTargetName = catalogue?.definitions?.firstOrNull {
-                it.id == liveTargetId && it.enabled && it.implementationId == io.talkcan.live.GptLiveChannelProvider.ID
-            }?.name
+            val priorityChannelId by currentService?.priorityChannelState?.collectAsStateWithLifecycle()
+                ?: remember { mutableStateOf<String?>(null) }
+            val channelConversations by currentService?.channelConversations?.collectAsStateWithLifecycle()
+                ?: remember { mutableStateOf(emptyMap<String, io.talkcan.live.LiveConversationView>()) }
 
             val missingPermissions = (bootstrapState as? BootstrapState.NeedsSetup)?.missingPermissions
                 ?: io.talkcan.service.RequiredPermissions.missing(this@MainActivity)
@@ -717,7 +717,8 @@ class MainActivity : ComponentActivity() {
                                     providerDescriptors = providerDescriptors,
                                     actions = actions,
                                     liveConversation = liveConversation,
-                                    liveTargetName = liveTargetName,
+                                    priorityChannelId = priorityChannelId,
+                                    channelConversations = channelConversations,
                                     onToggleLive = {
                                         ContextCompat.startForegroundService(
                                             this@MainActivity,
@@ -754,7 +755,7 @@ class MainActivity : ComponentActivity() {
                                                         SecondaryRoute.GenericProfiles -> "Provider profiles"
                                                         SecondaryRoute.VoiceProfiles -> "Voice profiles"
                                                         SecondaryRoute.SystemReadiness -> "System readiness"
-                                                        SecondaryRoute.LiveSettings -> "GPT-Live"
+                                                        SecondaryRoute.LiveSettings -> "Priority channel"
                                                     }
                                                     Text(
                                                         text = routeTitle,
@@ -799,6 +800,17 @@ class MainActivity : ComponentActivity() {
                                                     if (definition != null && descriptor != null) {
                                                         ChannelConfigurationScreen(
                                                             title = definition.name,
+                                                            accountContent = {
+                                                                if (definition.implementationId == io.talkcan.live.GptLiveChannelProvider.ID) {
+                                                                    io.talkcan.ui.LiveSettingsScreen(
+                                                                        state = liveSettings,
+                                                                        channels = catalogue?.definitions.orEmpty(),
+                                                                        onSave = { key, target -> currentServiceState?.saveLiveSettings(key, target) },
+                                                                        onClearKey = { currentServiceState?.clearLiveApiKey() },
+                                                                        keyOnly = true,
+                                                                    )
+                                                                }
+                                                            },
                                                             configurationOwnerId = definition.id,
                                                             descriptor = descriptor,
                                                             initialPayload = definition.configPayload,

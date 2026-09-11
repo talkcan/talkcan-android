@@ -30,6 +30,26 @@ import org.junit.Test
 class HostAudioCoordinatorTest {
 
     @Test
+    fun priorityHoldBlocksAutomaticPlaybackUntilRelease() = runTest {
+        val coordinator = HostAudioCoordinator()
+        coordinator.setPriorityHeld(true)
+        assertEquals(HostCaptureAdmission.Busy, coordinator.reserveCapture())
+        val priority = coordinator.reserveCapture(priority = true) as HostCaptureAdmission.Granted
+        assertTrue(coordinator.releaseCapture(priority.lease))
+        assertEquals(HostPlaybackResult.Busy, coordinator.play(RecordedPcm(ShortArray(1), 16_000)) {
+            error("Regular playback cannot acquire a route during priority takeover")
+        })
+        coordinator.setPriorityHeld(false)
+        val playback = ControllablePlayback()
+        val playing = async {
+            coordinator.play(RecordedPcm(ShortArray(1), 16_000)) { FakeRouteStrategy(FakeAcquiredRoute(playback)) }
+        }
+        playback.started.await()
+        playback.complete(PlaybackCompletion.Completed)
+        assertEquals(HostPlaybackResult.Completed, playing.await())
+    }
+
+    @Test
     fun fullDuplexExcludesPttAndPlaybackUntilTheOwningLeaseIsReleased() = runTest {
         val coordinator = HostAudioCoordinator()
         val lease = (coordinator.reserveFullDuplex() as HostFullDuplexAdmission.Granted).lease

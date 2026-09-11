@@ -96,6 +96,14 @@ fun SettingsHomeScreen(
                 enabled = true,
                 onClick = onChannelManagementClick
             )
+            if (onLiveSettingsClick != null) {
+                SettingsRow(
+                    label = "Priority channel",
+                    statusText = "Channel used while SOS is held",
+                    enabled = true,
+                    onClick = onLiveSettingsClick,
+                )
+            }
         }
 
         // Group 3: Integrations and profiles
@@ -103,14 +111,6 @@ fun SettingsHomeScreen(
             title = "Integrations and profiles",
             supportingText = "Provider packages, profiles, and voices."
         ) {
-            if (onLiveSettingsClick != null) {
-                SettingsRow(
-                    label = "GPT-Live",
-                    statusText = "API key and SOS full-duplex channel",
-                    enabled = true,
-                    onClick = onLiveSettingsClick,
-                )
-            }
             SettingsRow(
                 label = "Installed providers",
                 statusText = "Install and inspect GitHub provider packages",

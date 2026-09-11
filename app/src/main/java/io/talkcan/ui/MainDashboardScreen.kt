@@ -80,8 +80,9 @@ fun MainDashboardScreen(
     actions: PttUiActions,
     modifier: Modifier = Modifier,
     liveConversation: io.talkcan.live.LiveConversationView = io.talkcan.live.LiveConversationView(),
-    liveTargetName: String? = null,
+    priorityChannelId: String? = null,
     onToggleLive: (() -> Unit)? = null,
+    channelConversations: Map<String, io.talkcan.live.LiveConversationView> = emptyMap(),
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     var phonePttGesture by remember { mutableStateOf<PhonePttGestureState>(PhonePttGestureState.Idle) }
@@ -144,18 +145,12 @@ fun MainDashboardScreen(
                     appState = appState,
                     isCapturing = isCapturing,
                 )
-                if (onToggleLive != null) {
-                    LiveConversationPanel(
-                        view = liveConversation,
-                        targetName = liveTargetName,
-                        onToggle = onToggleLive,
-                    )
-                }
 
                 ChannelPanel(
                     appState = appState,
                     providerDescriptors = providerDescriptors,
                     actions = actions,
+                    channelConversations = channelConversations,
                 )
             }
 
@@ -165,6 +160,15 @@ fun MainDashboardScreen(
                 isCapturing = isCapturing,
                 actions = actions,
             )
+            if (priorityChannelId != null || liveConversation.isRunning) {
+                val owner = appState.channels.firstOrNull { it.id == (priorityChannelId ?: liveConversation.channelId) }
+                Text(
+                    text = if (priorityChannelId != null) "Priority: ${owner?.name.orEmpty()} · Release SOS to finish"
+                        else "${owner?.name.orEmpty()} · ${if (liveConversation.state.phase == io.talkcan.live.LiveSessionPhase.ACTIVE) "Microphone active" else "Connecting or stopping"}",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
 
             val activeChannel = appState.channels.firstOrNull {
                 it.id == appState.activeChannelId
@@ -176,12 +180,15 @@ fun MainDashboardScreen(
                 onPhonePttTransition = ::applyPhonePttTransition,
                 pttAudioState = appState.pttAudioState,
                 interactionBlockedReason = when {
-                    liveConversation.isRunning -> "End the live conversation before using PTT"
-                    providerDescriptors.firstOrNull { it.implementationId == activeChannel?.implementationId }
-                        ?.interactionMode == io.talkcan.model.ChannelInteractionMode.FULL_DUPLEX ->
-                        "Use SOS or Start live for this channel"
+                    priorityChannelId != null -> "Priority communication active"
+                    liveConversation.isRunning && liveConversation.channelId != activeChannel?.id ->
+                        "Another channel owns the conversation"
                     else -> null
                 },
+                fullDuplex = providerDescriptors.firstOrNull { it.implementationId == activeChannel?.implementationId }
+                    ?.interactionMode == io.talkcan.model.ChannelInteractionMode.FULL_DUPLEX,
+                conversationRunning = liveConversation.isRunning && liveConversation.channelId == activeChannel?.id,
+                onToggleConversation = { onToggleLive?.invoke() },
             )
         }
     }
@@ -467,6 +474,7 @@ private fun ChannelPanel(
     appState: AppState,
     providerDescriptors: List<ChannelImplementationDescriptor>,
     actions: PttUiActions,
+    channelConversations: Map<String, io.talkcan.live.LiveConversationView>,
 ) {
     Column(
         modifier = Modifier.selectableGroup(),
@@ -485,6 +493,7 @@ private fun ChannelPanel(
                     it.implementationId == channel.implementationId
                 },
                 actions = actions,
+                liveConversation = channelConversations[channel.id],
             )
         }
     }
@@ -523,8 +532,10 @@ private fun ChannelCard(
     activeChannelId: String?,
     descriptor: ChannelImplementationDescriptor?,
     actions: PttUiActions,
+    liveConversation: io.talkcan.live.LiveConversationView?,
 ) {
     val channelId = channel.id
+    var conversationExpanded by remember(channelId) { mutableStateOf(false) }
     val isActive = activeChannelId == channelId
     val isImmediatelyAvailable =
         channel.preparation is ChannelPreparationAvailability.Available
@@ -626,6 +637,19 @@ private fun ChannelCard(
                 Icon(
                     imageVector = Icons.Filled.Settings,
                     contentDescription = "Settings for ${channel.name}",
+                )
+            }
+        }
+        if (descriptor?.interactionMode == io.talkcan.model.ChannelInteractionMode.FULL_DUPLEX) {
+            androidx.compose.material3.TextButton(
+                onClick = { conversationExpanded = !conversationExpanded },
+                modifier = Modifier.testTag("channel-conversation-${channel.id}"),
+            ) {
+                Text(if (conversationExpanded) "Hide conversation" else "Conversation")
+            }
+            if (conversationExpanded) {
+                LiveConversationPanel(
+                    view = liveConversation ?: io.talkcan.live.LiveConversationView(channel.id, channel.name),
                 )
             }
         }
@@ -782,6 +806,9 @@ private fun PhonePttDock(
     pttAudioState: PttAudioOperationState,
     modifier: Modifier = Modifier,
     interactionBlockedReason: String? = null,
+    fullDuplex: Boolean = false,
+    conversationRunning: Boolean = false,
+    onToggleConversation: () -> Unit = {},
 ) {
     val activeChannelId = activeChannel?.id
     val currentPhonePttGesture by rememberUpdatedState(phonePttGesture)
@@ -862,6 +889,13 @@ private fun PhonePttDock(
             contentColor = StatusCyan
             borderColor = StatusCyan
         }
+        fullDuplex -> {
+            title = if (conversationRunning) "Stop conversation" else "Talk"
+            subtitle = "${activeChannel.name} · ${if (conversationRunning) "Click to stop" else "Click to start"}"
+            containerColor = NearBlack
+            contentColor = if (conversationRunning) SignalAmber else WarmAluminum
+            borderColor = SignalAmber
+        }
         activeChannel.preparation !is ChannelPreparationAvailability.Available -> {
             title = "Channel unavailable"
             subtitle = "Select another channel above"
@@ -889,7 +923,9 @@ private fun PhonePttDock(
     val buttonModifier = activeChannelId
         ?.takeIf { isTouchEnabled }
         ?.let { channelId ->
-            Modifier.phonePttInput(
+            if (fullDuplex) {
+                Modifier.clickable(role = Role.Button, onClick = onToggleConversation)
+            } else Modifier.phonePttInput(
                 channelId = channelId,
                 stateProvider = { currentPhonePttGesture },
                 onPhonePttTransition = { currentPhonePttTransition(it) },
@@ -920,7 +956,7 @@ private fun PhonePttDock(
                 .semantics(mergeDescendants = true) {
                     role = Role.Button
                     contentDescription = semanticsProjection.contentDescription
-                    stateDescription = semanticsProjection.stateDescription
+                    stateDescription = if (fullDuplex && isTouchEnabled) subtitle else semanticsProjection.stateDescription
                     if (!semanticsProjection.enabled) {
                         disabled()
                     }

@@ -102,3 +102,16 @@ The dashboard SHALL discover channel presentation from registered provider descr
 **Reason**: Diagnostic logs become an explicit Settings > Advanced destination; a hidden title gesture conflicts with the first-class settings system.
 
 **Migration**: Open Log Analysis from Settings > Advanced > Diagnostic logs.
+
+## ADDED Requirements
+
+### Requirement: Conversation review belongs to its channel
+Full-duplex conversation status, transcripts, and errors SHALL appear within
+the owning channel's review surface, not in a separate dashboard-wide panel.
+Review SHALL NOT select a channel or start transmission. The dashboard SHALL
+retain provider-independent communication ownership and microphone state.
+
+#### Scenario: Review another channel
+- **WHEN** the user expands a channel's Conversation control
+- **THEN** only that channel's session content SHALL appear
+- **AND** regular channel selection and microphone ownership SHALL remain unchanged

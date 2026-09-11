@@ -124,3 +124,25 @@ The fixed phone PTT control SHALL expose button role, active-channel destination
 - **WHEN** an accessibility service focuses a channel row
 - **THEN** the row SHALL expose its selected or unselected state and activation action
 - **AND** it SHALL NOT expose long-press-to-talk or slide-lock instructions
+
+### Requirement: Talk follows channel duplex mode
+The strict hold requirements apply to half-duplex channels. For a full-duplex
+channel, a Talk click SHALL start a conversation and a subsequent click SHALL
+stop it. The control SHALL retain its fixed position and identify its action.
+
+#### Scenario: Full-duplex Talk toggles
+- **WHEN** the selected channel is full-duplex and the user clicks Talk
+- **THEN** its conversation SHALL start without requiring a held gesture
+- **AND** another click SHALL stop that conversation
+
+### Requirement: Held SOS independently addresses the priority channel
+The user SHALL configure one priority channel of either duplex mode. SOS
+long-press SHALL end a running regular full-duplex conversation and start the
+priority interaction without changing regular selection. Release SHALL send a
+half-duplex recording or stop a full-duplex conversation. The regular
+conversation SHALL NOT resume automatically.
+
+#### Scenario: Release during startup
+- **WHEN** SOS is released before priority startup finishes
+- **THEN** the host SHALL cancel startup and close any admitted priority session
+- **AND** a late completion SHALL NOT leave the microphone active

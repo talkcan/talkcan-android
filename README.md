@@ -29,15 +29,23 @@ The [GPT-Live guide](https://developers.openai.com/api/docs/guides/live)
 describes the voice session and its separate backend model.
 
 1. In **Settings → Channel management**, add a **GPT-Live** channel.
-2. In **Settings → GPT-Live**, enter your OpenAI API key.
-3. Select the channel under **SOS live channel**.
-4. Tap **Save**.
-5. Press SOS, or tap **Start live** on the Radio screen.
+2. Open that channel's settings and save your OpenAI API key under **OpenAI account**.
+3. Select the channel on Radio.
+4. Click **Talk** to start the conversation.
+5. Click **Stop conversation** to stop.
 
-Press SOS again, or use **End live** on the screen or notification, to stop.
-The microphone stays active until the conversation ends. Starting the
-conversation does not change the regular PTT channel. Regular PTT and other
-audio playback cannot run during the conversation.
+The regular Talk control uses the selected channel's duplex mode. Half-duplex
+channels record while held and send on release. Full-duplex channels start
+and stop with a click. The microphone stays active during a full-duplex
+conversation. Each channel's **Conversation** control shows its session
+status, transcripts, and errors. This review stays in memory until the service
+stops.
+
+**Settings → Priority channel** assigns one enabled channel to SOS.
+A long SOS hold ends any running regular conversation and talks to the
+priority channel without changing the regular selection. For half-duplex
+channels, release sends the recording. For full-duplex channels, release
+stops the conversation. The regular conversation does not resume.
 
 The channel settings select the voice, backend model, instructions, and tool
 permissions. Channel switching and file reads are disabled by default.

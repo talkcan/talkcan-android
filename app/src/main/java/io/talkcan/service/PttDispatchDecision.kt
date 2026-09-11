@@ -11,8 +11,11 @@ internal sealed interface PttDispatchDecision {
  * Decides PTT admission exclusively from the registry's generic, ordered runtime projection.
  * Both ordinary and car PTT supply the same snapshot before reserving input.
  */
-internal fun decidePttDispatch(runtimeSnapshot: RuntimeRegistrySnapshot): PttDispatchDecision? {
-    val channelId = runtimeSnapshot.activeChannelId.takeIf(String::isNotBlank) ?: return null
+internal fun decidePttDispatch(
+    runtimeSnapshot: RuntimeRegistrySnapshot,
+    targetChannelId: String = runtimeSnapshot.activeChannelId,
+): PttDispatchDecision? {
+    val channelId = targetChannelId.takeIf(String::isNotBlank) ?: return null
     val preparation = runtimeSnapshot.entries
         .firstOrNull { it.id == channelId }
         ?.preparation

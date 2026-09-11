@@ -75,3 +75,14 @@
   slot immediately above phone PTT, showing the meter only while capturing.
 - [x] 8.10 Give the talk-level meter and audio-route buttons the same content
   height and shared header/card geometry within the fixed operational slot.
+
+## 9. Duplex Channels And Held Priority Communication
+
+- [x] 9.1 Keep regular channel selection independent from the single configurable SOS priority target.
+- [x] 9.2 Use hold/release for regular half-duplex Talk and click-to-toggle for regular full-duplex Talk.
+- [x] 9.3 Route SOS long-press and release to either duplex mode without changing regular selection.
+- [x] 9.4 End the regular full-duplex conversation before priority communication, cancel released startup, and never resume automatically.
+- [x] 9.5 Move conversation status, transcripts, and errors inside their channel and account settings into GPT-Live channel settings.
+- [x] 9.6 Keep GPT-Live native and use shared duplex metadata for operational controls.
+- [x] 9.7 Exercise priority-controller startup/release races with regression coverage and an executable smoke scenario.
+- [ ] 9.8 Complete physical SOS and RSM audio verification. Phone Talk start/stop, Journal hold/release, fixed control bounds, channel-local review, account settings, and priority choices passed on a5c3b76a. Hardware button and audible-route acceptance remain pending.

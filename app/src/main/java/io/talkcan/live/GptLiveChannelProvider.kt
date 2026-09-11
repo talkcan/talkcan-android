@@ -43,8 +43,8 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
         implementationId = ID,
         presentation = ChannelPresentationMetadata(
             label = "GPT-Live",
-            summary = "Full-duplex voice assistant. Press SOS to start or end a conversation.",
-            unavailableMessage = "Configure your GPT-Live API key in Settings.",
+            summary = "Full-duplex voice assistant. Click Talk to start or stop.",
+            unavailableMessage = "Configure the OpenAI account in this channel's settings.",
         ),
         configuration = Configuration,
         configurationFields = listOf(
@@ -81,7 +81,7 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
             enabled = request.definition.enabled,
             preparation = ChannelPreparationAvailability.Unavailable(ChannelPreparationReason.ProviderInitialising),
             executionStatus = ChannelExecutionStatus.IDLE,
-            summary = "Press SOS to start a full-duplex conversation",
+            summary = "Click Talk to start a conversation",
         ))
         override val snapshot = mutableSnapshot.asStateFlow()
         override val readinessRefreshIntervalMillis = 500L
@@ -90,16 +90,11 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
         private var closed = false
 
         override suspend fun prepareInput(): ChannelInputAcceptance =
-            ChannelInputAcceptance.Refused("This is a full-duplex channel. Press SOS or Start live instead of holding PTT.")
+            ChannelInputAcceptance.Refused("Click Talk to start this full-duplex conversation.")
 
         override suspend fun handleSos() {
             if (closed) return
-            val existing = session
-            if (existing != null) {
-                stopSession()
-                refreshReadiness()
-                return
-            }
+            stopSession()
             when (val acquired = request.capabilities.acquire(CapabilityKey.LiveConversation)) {
                 is CapabilityAcquisition.Available -> {
                     lease = acquired.lease
@@ -129,7 +124,7 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
                 else -> {
                     mutableSnapshot.value = mutableSnapshot.value.copy(
                         executionStatus = ChannelExecutionStatus.FAILED,
-                        summary = "GPT-Live is unavailable. Configure the API key in Settings.",
+                        summary = "Configure the OpenAI account in this channel's settings.",
                     )
                     return
                 }
@@ -149,7 +144,7 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
             mutableSnapshot.value = mutableSnapshot.value.copy(
                 preparation = if (ready) ChannelPreparationAvailability.Available else
                     ChannelPreparationAvailability.Unavailable(ChannelPreparationReason.RuntimeReadiness(
-                        "Configure the GPT-Live API key in Settings.",
+                        "Configure the OpenAI account in this channel's settings.",
                     )),
                 executionStatus = when (state?.phase) {
                     LiveSessionPhase.CONNECTING, LiveSessionPhase.CLOSING -> ChannelExecutionStatus.PROCESSING
@@ -159,10 +154,10 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
                 },
                 summary = when (state?.phase) {
                     LiveSessionPhase.CONNECTING -> "Connecting to GPT-Live"
-                    LiveSessionPhase.ACTIVE -> "Live microphone · listening and speaking · SOS to end"
+                    LiveSessionPhase.ACTIVE -> "Microphone active · listening and speaking"
                     LiveSessionPhase.CLOSING -> "Ending live conversation"
                     LiveSessionPhase.FAILED -> state.message ?: "Live conversation failed"
-                    else -> if (ready) "Full duplex · press SOS to start" else "Configure the GPT-Live API key in Settings"
+                    else -> if (ready) "Full duplex · click Talk to start" else "Configure the OpenAI account in this channel's settings"
                 },
             )
         }

@@ -50,14 +50,27 @@ internal class ServiceLiveConversationManager(
     @Volatile private var shuttingDown = false
     private val mutableView = MutableStateFlow(LiveConversationView())
     val view = mutableView.asStateFlow()
+    private val mutableConversations = MutableStateFlow<Map<String, LiveConversationView>>(emptyMap())
+    val conversations = mutableConversations.asStateFlow()
+
+    private fun publishView(value: LiveConversationView) {
+        mutableView.value = value
+        value.channelId?.let { id ->
+            mutableConversations.value = mutableConversations.value + (id to value)
+        }
+    }
     val hasSession: Boolean get() = active != null
     val acceptsTools: Boolean get() = active?.permitted?.get() == true && !shuttingDown
 
     fun capability(identity: CapabilityScopeIdentity): LiveConversationCapability? =
         if (settings.state.value.keyConfigured && !shuttingDown) Port(identity) else null
 
-    fun reportUnavailable(message: String) {
-        if (active == null) mutableView.value = LiveConversationView(state = LiveSessionState(LiveSessionPhase.FAILED, message))
+    fun reportUnavailable(channelId: String, message: String) {
+        if (active == null) publishView(LiveConversationView(
+            channelId = channelId,
+            channelName = catalogue().definitions.firstOrNull { it.id == channelId }?.name,
+            state = LiveSessionState(LiveSessionPhase.FAILED, message),
+        ))
     }
 
     suspend fun closeCurrent() {
@@ -107,7 +120,7 @@ internal class ServiceLiveConversationManager(
         }
         val entry = Entry(identity, created.value, reader, permitted)
         active = entry
-        mutableView.value = LiveConversationView(definition.id, definition.name, LiveSessionState(LiveSessionPhase.CONNECTING))
+        publishView(LiveConversationView(definition.id, definition.name, LiveSessionState(LiveSessionPhase.CONNECTING)))
         entry.observer = scope.launch {
             var observedStart = false
             entry.engine.state.collect { state ->
@@ -115,7 +128,7 @@ internal class ServiceLiveConversationManager(
                 if (state.phase != LiveSessionPhase.IDLE) observedStart = true
                 if (!observedStart) return@collect
                 entry.state.value = state
-                mutableView.value = LiveConversationView(definition.id, definition.name, state)
+                publishView(LiveConversationView(definition.id, definition.name, state))
                 if (state.phase == LiveSessionPhase.IDLE || state.phase == LiveSessionPhase.FAILED) {
                     scope.launch { finish(entry) }
                 }
@@ -127,9 +140,9 @@ internal class ServiceLiveConversationManager(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                if (active === entry) mutableView.value = mutableView.value.copy(
+                if (active === entry) publishView(mutableView.value.copy(
                     state = LiveSessionState(LiveSessionPhase.FAILED, "Could not start the live conversation"),
-                )
+                ))
                 scope.launch { finish(entry) }
             }
         }
@@ -150,7 +163,7 @@ internal class ServiceLiveConversationManager(
                     entry.state.value = entry.state.value.copy(phase = LiveSessionPhase.CLOSING)
                 }
                 if (active === entry && mutableView.value.state.phase != LiveSessionPhase.FAILED) {
-                    mutableView.value = mutableView.value.copy(state = mutableView.value.state.copy(phase = LiveSessionPhase.CLOSING))
+                    publishView(mutableView.value.copy(state = mutableView.value.state.copy(phase = LiveSessionPhase.CLOSING)))
                 }
                 entry.engine.close()
                 entry.starter?.cancelAndJoin()
@@ -161,8 +174,8 @@ internal class ServiceLiveConversationManager(
                     if (active === entry) {
                         active = null
                         val final = entry.engine.state.value
-                        mutableView.value = mutableView.value.copy(state = if (final.phase == LiveSessionPhase.FAILED) final else
-                            mutableView.value.state.copy(phase = LiveSessionPhase.IDLE, message = final.message))
+                        publishView(mutableView.value.copy(state = if (final.phase == LiveSessionPhase.FAILED) final else
+                            mutableView.value.state.copy(phase = LiveSessionPhase.IDLE, message = final.message)))
                         entry.state.value = mutableView.value.state
                     }
                 }

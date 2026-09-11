@@ -135,7 +135,10 @@ When an inbound message arrives on the active channel while the user is transmit
 - Talkcan does not interrupt or mix playback into the user's transmission.
 - After PTT release, Talkcan automatically plays the queued active-channel messages.
 
-This defines the active channel as half-duplex from the user's operational perspective.
+This defines half-duplex channels from the user's operational perspective.
+For a full-duplex channel, clicking Talk starts continuous two-way audio.
+Clicking Talk again stops the conversation. Full-duplex channels use the same
+channel list and operational control, not a separate assistant interface.
 
 ## Inactive Channel Behavior
 
@@ -182,15 +185,14 @@ The current hardware exposes this through the long SOS hold interaction. Despite
 
 In active mode:
 
-- A long SOS press starts capturing audio for the user-selected priority channel.
-- The user does not need to hold the normal PTT button.
-- Capture continues while SOS remains held.
-- Releasing SOS ends the capture and sends the message to the priority channel.
+- A long SOS press addresses the user-selected priority channel without changing the regular channel selection.
+- SOS ends any running regular full-duplex conversation before priority communication starts.
+- For half-duplex priority channels, capture continues while SOS remains held. Release sends the recording.
+- For full-duplex priority channels, the conversation continues while SOS remains held. Release stops it.
+- The regular conversation does not resume after release.
 
-The long SOS behavior effectively gives the user a second PTT path:
-
-- Normal PTT talks to the active channel.
-- Long SOS talks to the priority channel.
+Normal Talk and SOS have independent channel selections. The priority selection
+contains one configured channel and takes precedence while SOS is held.
 
 ## Hardware-First Interaction Model
 
@@ -209,10 +211,10 @@ Active mode is the normal speaking mode. Control mode is the navigation mode.
 
 In active mode:
 
-- PTT hold records and sends an audio message to the active channel.
+- Talk holds record and send on half-duplex channels. Talk clicks start or stop full-duplex conversations.
 - SOS short replays the last heard message when no audio is playing.
 - SOS short skips the current message when audio is playing.
-- SOS long hold records and sends an audio message to the priority channel.
+- SOS long hold talks to the priority channel using its duplex mode. Release finishes that interaction.
 - Control button enters control mode.
 
 Active mode is optimized for talking and listening with minimal cognitive overhead.
