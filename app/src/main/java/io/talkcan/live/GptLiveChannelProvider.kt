@@ -38,7 +38,7 @@ import org.json.JSONObject
 
 /** Host-native conversational assistant. Transport, audio, credentials, and tools stay behind its lease. */
 class GptLiveChannelProvider : ChannelImplementationProvider {
-    override val fingerprint = ProviderRevisionFingerprint("gpt-live-1-channel-1")
+    override val fingerprint = ProviderRevisionFingerprint("gpt-live-1-channel-2")
     override val descriptor = ChannelImplementationDescriptor(
         implementationId = ID,
         presentation = ChannelPresentationMetadata(
@@ -62,6 +62,27 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
             ChannelConfigurationField.BooleanField(
                 "allow_channel_read", "Allow reading channel files",
                 "Share text from channel-mounted folders with OpenAI when requested. Host secrets are never exposed.",
+            ),
+            ChannelConfigurationField.BooleanField(
+                "allow_keyboard", "Allow keyboard output",
+                "Type text or press Enter only when requested. Output goes to the computer's focused application.",
+            ),
+            ChannelConfigurationField.DynamicChoiceField(
+                "keyboard_platform", "Keyboard platform",
+                io.talkcan.model.DynamicConfigurationChoiceSourceId(io.talkcan.dependency.DynamicChoiceSource.KEYBOARD_OUTPUT_PLATFORMS),
+                visibleWhenFieldId = "allow_keyboard", visibleWhenValue = "true",
+            ),
+            ChannelConfigurationField.DynamicChoiceField(
+                "keyboard_layout", "Keyboard layout",
+                io.talkcan.model.DynamicConfigurationChoiceSourceId(io.talkcan.dependency.DynamicChoiceSource.KEYBOARD_OUTPUT_LAYOUTS),
+                dependsOnFieldId = "keyboard_platform",
+                visibleWhenFieldId = "allow_keyboard", visibleWhenValue = "true",
+            ),
+            ChannelConfigurationField.DynamicChoiceField(
+                "keyboard_profile", "Keyboard profile",
+                io.talkcan.model.DynamicConfigurationChoiceSourceId.KEYBOARD_OUTPUT_PROFILES,
+                dependsOnFieldId = "keyboard_layout",
+                visibleWhenFieldId = "allow_keyboard", visibleWhenValue = "true",
             ),
         ),
         requiredCapabilities = setOf(ChannelCapability.LiveConversation),
@@ -108,6 +129,7 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
                             ),
                             allowChannelControl = config.getBoolean("allow_channel_control"),
                             allowChannelRead = config.getBoolean("allow_channel_read"),
+                            keyboardProfile = if (config.getBoolean("allow_keyboard")) config.getString("keyboard_profile") else null,
                         ))
                     }
                     if (outcome is CapabilityOperationResult.Success) {
@@ -183,7 +205,7 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
 
     private object Configuration : ChannelConfigurationProvider {
         override val implementationId = ID
-        override val currentSchemaVersion = 1
+        override val currentSchemaVersion = 2
         override fun defaultPayload(): OpaqueJsonObject = OpaqueJsonObject.fromJsonObject(JSONObject()
             .put("backend_model", "gpt-5.6-luna")
             .put("voice", "marin")
@@ -191,34 +213,55 @@ class GptLiveChannelProvider : ChannelImplementationProvider {
                 "Delegate all questions about channels and all app operations to the backend. " +
                 "Only report an action as complete when a tool confirms it.")
             .put("allow_channel_control", false)
-            .put("allow_channel_read", false))
+            .put("allow_channel_read", false)
+            .put("allow_keyboard", false)
+            .put("keyboard_platform", JSONObject.NULL)
+            .put("keyboard_layout", JSONObject.NULL)
+            .put("keyboard_profile", JSONObject.NULL))
 
         override fun validate(schemaVersion: Int, payload: OpaqueJsonObject): ProviderConfigurationResult {
             if (schemaVersion != currentSchemaVersion) return ProviderConfigurationResult.Failure(
                 ChannelProviderError.UnsupportedSchemaVersion(ID, schemaVersion, currentSchemaVersion),
             )
             val json = payload.toJsonObject()
-            val valid = json.keys().asSequence().toSet() == FIELDS &&
-                (json.opt("backend_model") as? String)?.matches(Regex("[a-zA-Z0-9._-]{1,80}")) == true &&
-                json.opt("voice") in VOICES &&
-                (json.opt("instructions") as? String)?.let { it.isNotBlank() && it.length <= 4_000 } == true &&
-                json.opt("allow_channel_control") is Boolean && json.opt("allow_channel_read") is Boolean
+            val valid = json.keys().asSequence().toSet() == FIELDS && validBase(json) &&
+                json.opt("allow_keyboard") is Boolean &&
+                KEYBOARD_FIELDS.all { field ->
+                    val value = json.opt(field)
+                    if (json.optBoolean("allow_keyboard")) value is String && value.isNotBlank() && value.toByteArray().size <= 256
+                    else value == JSONObject.NULL || value is String && value.toByteArray().size <= 256
+                }
             return if (valid) ProviderConfigurationResult.Success(ValidatedChannelConfiguration(ID, schemaVersion, payload))
             else ProviderConfigurationResult.Failure(ChannelProviderError.InvalidConfiguration(
-                ID, schemaVersion, "Use a valid backend model, supported voice, instructions up to 4000 characters, and tool permissions.",
+                ID, schemaVersion, "Use valid voice settings. When keyboard output is enabled, select its platform, layout, and profile.",
             ))
         }
 
-        override fun migrateStep(fromSchemaVersion: Int, payload: OpaqueJsonObject): ChannelConfigurationMigrationStep =
-            ChannelConfigurationMigrationStep.Failure(
-                ChannelProviderError.UnsupportedSchemaVersion(ID, fromSchemaVersion, currentSchemaVersion),
+        override fun migrateStep(fromSchemaVersion: Int, payload: OpaqueJsonObject): ChannelConfigurationMigrationStep {
+            val json = payload.toJsonObject()
+            if (fromSchemaVersion == 1 && json.keys().asSequence().toSet() == BASE_FIELDS && validBase(json)) {
+                json.put("allow_keyboard", false)
+                KEYBOARD_FIELDS.forEach { json.put(it, JSONObject.NULL) }
+                return ChannelConfigurationMigrationStep.Success(OpaqueJsonObject.fromJsonObject(json))
+            }
+            return ChannelConfigurationMigrationStep.Failure(
+                ChannelProviderError.InvalidConfiguration(ID, fromSchemaVersion, "Cannot migrate invalid GPT-Live settings."),
             )
+        }
+
+        private fun validBase(json: JSONObject): Boolean =
+            (json.opt("backend_model") as? String)?.matches(Regex("[a-zA-Z0-9._-]{1,80}")) == true &&
+                json.opt("voice") in VOICES &&
+                (json.opt("instructions") as? String)?.let { it.isNotBlank() && it.length <= 4_000 } == true &&
+                json.opt("allow_channel_control") is Boolean && json.opt("allow_channel_read") is Boolean
     }
 
     companion object {
         val ID = ChannelImplementationId("builtin:gpt-live")
         private val VOICES = listOf("marin", "quartz", "ripple", "vesper", "willow", "stone", "gleam", "meridian",
             "bossa", "tempo", "beacon", "delta", "cinder")
-        private val FIELDS = setOf("backend_model", "voice", "instructions", "allow_channel_control", "allow_channel_read")
+        private val BASE_FIELDS = setOf("backend_model", "voice", "instructions", "allow_channel_control", "allow_channel_read")
+        private val KEYBOARD_FIELDS = setOf("keyboard_platform", "keyboard_layout", "keyboard_profile")
+        private val FIELDS = BASE_FIELDS + KEYBOARD_FIELDS + "allow_keyboard"
     }
 }

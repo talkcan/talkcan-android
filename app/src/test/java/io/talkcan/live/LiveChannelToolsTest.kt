@@ -133,26 +133,18 @@ class LiveChannelToolsTest {
     // -- definitions ----------------------------------------------------
 
     @Test
-    fun definitionsReturnsFiveBackendCompatibleFunctionTools() {
-        val fixture = Fixture(
+    fun keyboardToolsAreHiddenAndRefusedWithoutPermission() = runTest {
+        val tools = Fixture(
             catalogue = ChannelCatalogueSnapshot(listOf(definition()), "ch1"),
             runtimes = listOf(runtime()),
-        )
-        val defs = fixture.tools().definitions()
-        assertEquals(5, defs.length())
-        val names = (0 until defs.length()).map { defs.getJSONObject(it).getString("name") }.toSet()
-        assertEquals(
-            setOf("list_channels", "get_channel", "select_channel", "list_channel_files", "read_channel_file"),
-            names,
-        )
-        for (i in 0 until defs.length()) {
-            val entry = defs.getJSONObject(i)
-            assertEquals("function", entry.getString("type"))
-            assertTrue(entry.getString("description").isNotBlank())
-            val params = entry.getJSONObject("parameters")
-            assertEquals("object", params.getString("type"))
-            assertFalse(params.getBoolean("additionalProperties"))
-        }
+        ).tools()
+        val definitions = tools.definitions()
+        val names = (0 until definitions.length()).map { definitions.getJSONObject(it).getString("name") }
+        assertFalse(names.contains(LiveKeyboardTools.SEND_TEXT))
+        assertFalse(names.contains(LiveKeyboardTools.SEND_KEY))
+        assertEquals("not_permitted", code(tools.execute(
+            LiveKeyboardTools.SEND_TEXT, JSONObject().put("text", "draft"),
+        )))
     }
 
     // -- list_channels --------------------------------------------------

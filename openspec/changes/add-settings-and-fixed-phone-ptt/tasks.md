@@ -86,3 +86,12 @@
 - [x] 9.6 Keep GPT-Live native and use shared duplex metadata for operational controls.
 - [x] 9.7 Exercise priority-controller startup/release races with regression coverage and an executable smoke scenario.
 - [ ] 9.8 Complete physical SOS and RSM audio verification. Phone Talk start/stop, Journal hold/release, fixed control bounds, channel-local review, account settings, and priority choices passed on a5c3b76a. Hardware button and audible-route acceptance remain pending.
+
+## 10. On-Demand GPT-Live Keyboard Output
+
+- [x] 10.1 Add disabled-by-default keyboard permission and dependent platform, layout, and profile settings.
+- [x] 10.2 Expose explicit text and Enter tools through the shared generation-scoped Sleepwalker adapter.
+- [x] 10.3 Cancel conversation-owned output on shutdown without closing other channels' keyboard access.
+- [x] 10.4 Cover permission refusal, UTF-8 bounds, uncertain delivery, cancellation, and safe settings migration with regressions.
+- [x] 10.5 Run an executable composition smoke with an in-memory output sink. Verify dependent choices and disabled persisted permission on a5c3b76a.
+- [x] 10.6 Verify physical keyboard output. User confirmed that the integration works after device installation.

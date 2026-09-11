@@ -15,6 +15,10 @@ All notable changes to Talkcan are documented in this file.
 - Added encrypted API-key settings inside GPT-Live channel settings.
 - Added permission-controlled channel switching and mounted text-file reads
   through bounded GPT-Live backend tools.
+- Added on-demand GPT-Live keyboard tools through the shared Sleepwalker service.
+  Channel settings control permission, platform, layout, and profile.
+  Keyboard output stays disabled after an upgrade. Conversation shutdown cancels
+  its pending output without closing the shared keyboard connection.
 
 ### Changed
 

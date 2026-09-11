@@ -44,6 +44,8 @@ internal class ServiceLiveConversationManager(
     private val readerFactory: (() -> Boolean) -> LiveChannelReader,
     private val beforeStart: suspend () -> Boolean,
     private val onStopped: suspend () -> Unit,
+    private val keyboardFactory: (CapabilityScopeIdentity, io.talkcan.channel.capability.OutputExecutionOwner) ->
+        io.talkcan.channel.capability.KeyboardOutputAdapter,
 ) {
     private val mutex = Mutex()
     @Volatile private var active: Entry? = null
@@ -94,13 +96,29 @@ internal class ServiceLiveConversationManager(
             return CapabilityOperationResult.Unavailable(CapabilityUnavailableReason.POLICY_REFUSED)
         }
         val payload = definition.configPayload.toJsonObject()
+        val keyboardProfile = if (payload.optBoolean("allow_keyboard", false)) {
+            (payload.opt("keyboard_profile") as? String)?.takeIf { it.isNotBlank() && it.toByteArray().size <= 256 }
+                ?: return CapabilityOperationResult.Unavailable(CapabilityUnavailableReason.NOT_CONFIGURED)
+        } else null
         if (request.allowChannelControl != payload.optBoolean("allow_channel_control", false) ||
-            request.allowChannelRead != payload.optBoolean("allow_channel_read", false)
+            request.allowChannelRead != payload.optBoolean("allow_channel_read", false) ||
+            request.keyboardProfile != keyboardProfile
         ) return CapabilityOperationResult.Unavailable(CapabilityUnavailableReason.POLICY_REFUSED)
         if (!beforeStart()) return CapabilityOperationResult.Unavailable(CapabilityUnavailableReason.HOST_NOT_READY)
         val permitted = AtomicBoolean(true)
         val isCurrent = { permitted.get() && active?.permitted === permitted && !shuttingDown }
         val reader = readerFactory(isCurrent)
+        val keyboard = keyboardProfile?.let { profile ->
+            io.talkcan.live.LiveKeyboardTools(
+                scope,
+                keyboardFactory(identity, io.talkcan.channel.capability.OutputExecutionOwner(
+                    io.talkcan.channel.capability.OutputExecutionOwnerKind.BUILT_IN,
+                    java.util.UUID.randomUUID().toString(),
+                )),
+                io.talkcan.channel.capability.TextOutputProfile(profile),
+                isCurrent,
+            )
+        }
         val tools = LiveChannelTools(
             catalogue = catalogue,
             snapshots = snapshots,
@@ -109,16 +127,18 @@ internal class ServiceLiveConversationManager(
             allowControl = request.allowChannelControl,
             allowRead = request.allowChannelRead,
             sessionIsActive = isCurrent,
+            keyboard = keyboard,
         )
         val created = settings.useKey { apiKey ->
             GptLiveSession(scope, audioFactory(), tools, request.configuration, apiKey)
         }
         if (created !is ProtectedSecretResult.Success) {
             reader.close()
+            keyboard?.close()
             onStopped()
             return CapabilityOperationResult.Unavailable(CapabilityUnavailableReason.NOT_CONFIGURED)
         }
-        val entry = Entry(identity, created.value, reader, permitted)
+        val entry = Entry(identity, created.value, reader, permitted, keyboard)
         active = entry
         publishView(LiveConversationView(definition.id, definition.name, LiveSessionState(LiveSessionPhase.CONNECTING)))
         entry.observer = scope.launch {
@@ -165,7 +185,9 @@ internal class ServiceLiveConversationManager(
                 if (active === entry && mutableView.value.state.phase != LiveSessionPhase.FAILED) {
                     publishView(mutableView.value.copy(state = mutableView.value.state.copy(phase = LiveSessionPhase.CLOSING)))
                 }
+                entry.keyboard?.revoke()
                 entry.engine.close()
+                entry.keyboard?.close()
                 entry.starter?.cancelAndJoin()
                 entry.observer?.cancelAndJoin()
                 entry.reader.close()
@@ -197,6 +219,7 @@ internal class ServiceLiveConversationManager(
         val engine: GptLiveSession,
         val reader: LiveChannelReader,
         val permitted: AtomicBoolean,
+        val keyboard: io.talkcan.live.LiveKeyboardTools?,
         val finished: CompletableDeferred<Unit> = CompletableDeferred(),
         val state: MutableStateFlow<LiveSessionState> = MutableStateFlow(LiveSessionState(LiveSessionPhase.CONNECTING)),
         var observer: Job? = null,

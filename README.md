@@ -54,6 +54,15 @@ mounted files, and read bounded UTF-8 text. File reads use each channel's
 declared folder grants. Tools cannot read host credentials, transmit PTT
 recordings, delete channels, or change app settings.
 
+Keyboard output is disabled by default, including after an upgrade.
+**Allow keyboard output** adds tools to type requested text and press Enter.
+The channel settings select the keyboard platform, layout, and profile.
+These tools use the shared Sleepwalker service and its output queue.
+Text goes to the connected computer's focused application. Enter can submit
+a form or run a command. GPT-Live does not automatically dictate speech or
+append Enter. A conversation stop cancels its pending keyboard output.
+Uncertain delivery does not trigger an automatic retry.
+
 The app encrypts your API key with Android Keystore. The key authenticates
 requests to OpenAI. Audio and permitted tool results leave the device.
 OpenAI bills voice sessions and backend work separately.

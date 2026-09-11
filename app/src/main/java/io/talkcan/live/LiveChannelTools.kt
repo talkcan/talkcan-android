@@ -80,6 +80,7 @@ public interface LiveChannelReader {
  * @param allowControl per-instance `allow_channel_control` gate for `select_channel`.
  * @param allowRead per-instance `allow_channel_read` gate for mounts/list/read.
  * @param sessionIsActive live-session liveness; checked before effects and after awaits.
+ * @param keyboard conversation-scoped keyboard tools, absent unless the channel permits keyboard output.
  */
 public class LiveChannelTools(
     private val catalogue: () -> ChannelCatalogueSnapshot,
@@ -89,6 +90,7 @@ public class LiveChannelTools(
     private val allowControl: Boolean,
     private val allowRead: Boolean,
     private val sessionIsActive: () -> Boolean,
+    private val keyboard: LiveAppTools? = null,
 ) : LiveAppTools {
 
     public companion object {
@@ -232,6 +234,9 @@ public class LiveChannelTools(
                 JSONArray().put("channel_id").put("mount_id").put("path"),
             ),
         )
+        keyboard?.definitions()?.let { definitions ->
+            for (index in 0 until definitions.length()) tools.put(definitions.getJSONObject(index))
+        }
         return tools
     }
 
@@ -242,6 +247,9 @@ public class LiveChannelTools(
             TOOL_SELECT_CHANNEL -> execSelectChannel(arguments)
             TOOL_LIST_FILES -> execListFiles(arguments)
             TOOL_READ_FILE -> execReadFile(arguments)
+            LiveKeyboardTools.SEND_TEXT, LiveKeyboardTools.SEND_KEY ->
+                keyboard?.execute(name, arguments)
+                    ?: error("not_permitted", "Keyboard output is disabled in this channel's settings.")
             else -> throw IllegalArgumentException("unknown tool: $name")
         }
     }

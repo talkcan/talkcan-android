@@ -879,6 +879,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
                 }
             },
             onStopped = { onLiveConversationStopped() },
+            keyboardFactory = textOutputService::keyboardOutputAdapter,
         )
         mountSelectionController = io.talkcan.ui.MountSelectionController(safMountAdapter) { request, _ ->
             serviceScope.launch {

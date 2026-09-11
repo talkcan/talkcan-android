@@ -13,6 +13,7 @@ data class LiveConversationRequest(
     val configuration: LiveSessionConfiguration,
     val allowChannelControl: Boolean,
     val allowChannelRead: Boolean,
+    val keyboardProfile: String?,
 )
 
 /** Session authority remains bound to the capability lease and runtime generation. */
