@@ -79,6 +79,9 @@ fun MainDashboardScreen(
     providerDescriptors: List<ChannelImplementationDescriptor>,
     actions: PttUiActions,
     modifier: Modifier = Modifier,
+    liveConversation: io.talkcan.live.LiveConversationView = io.talkcan.live.LiveConversationView(),
+    liveTargetName: String? = null,
+    onToggleLive: (() -> Unit)? = null,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     var phonePttGesture by remember { mutableStateOf<PhonePttGestureState>(PhonePttGestureState.Idle) }
@@ -141,6 +144,13 @@ fun MainDashboardScreen(
                     appState = appState,
                     isCapturing = isCapturing,
                 )
+                if (onToggleLive != null) {
+                    LiveConversationPanel(
+                        view = liveConversation,
+                        targetName = liveTargetName,
+                        onToggle = onToggleLive,
+                    )
+                }
 
                 ChannelPanel(
                     appState = appState,
@@ -165,6 +175,13 @@ fun MainDashboardScreen(
                 phonePttTargetChannelId = phonePttTargetChannelId,
                 onPhonePttTransition = ::applyPhonePttTransition,
                 pttAudioState = appState.pttAudioState,
+                interactionBlockedReason = when {
+                    liveConversation.isRunning -> "End the live conversation before using PTT"
+                    providerDescriptors.firstOrNull { it.implementationId == activeChannel?.implementationId }
+                        ?.interactionMode == io.talkcan.model.ChannelInteractionMode.FULL_DUPLEX ->
+                        "Use SOS or Start live for this channel"
+                    else -> null
+                },
             )
         }
     }
@@ -666,6 +683,7 @@ internal fun phonePttDockSemantics(
     phonePttGesture: PhonePttGestureState,
     phonePttTargetChannelId: String?,
     pttAudioState: PttAudioOperationState,
+    interactionBlockedReason: String? = null,
 ): PhonePttDockSemantics {
     val activeChannelId = activeChannel?.id
     val isPlaybackActive = pttAudioState.isPlaybackActive
@@ -673,7 +691,7 @@ internal fun phonePttDockSemantics(
     val source = pttAudioState.source
 
     val isNonPhoneSession = phase != PttAudioOperationPhase.IDLE && source != PttSource.Phone
-    val isTouchEnabled = activeChannelId != null && !isNonPhoneSession && !isPlaybackActive
+    val isTouchEnabled = activeChannelId != null && !isNonPhoneSession && !isPlaybackActive && interactionBlockedReason == null
 
     val contentDescription = if (activeChannel != null) {
         "Talk to ${activeChannel.name}"
@@ -728,6 +746,7 @@ internal fun phonePttDockSemantics(
 
         if (!isTouchEnabled) {
             val disabledReason = when {
+                interactionBlockedReason != null -> interactionBlockedReason
                 activeChannelId == null -> "No active channel"
                 isPlaybackActive -> "Playback Active"
                 isNonPhoneSession -> {
@@ -762,6 +781,7 @@ private fun PhonePttDock(
     onPhonePttTransition: (PhonePttGestureTransition) -> Unit,
     pttAudioState: PttAudioOperationState,
     modifier: Modifier = Modifier,
+    interactionBlockedReason: String? = null,
 ) {
     val activeChannelId = activeChannel?.id
     val currentPhonePttGesture by rememberUpdatedState(phonePttGesture)
@@ -775,7 +795,7 @@ private fun PhonePttDock(
     val isNonPhoneSession =
         phase != PttAudioOperationPhase.IDLE && source != PttSource.Phone
     val isTouchEnabled =
-        activeChannelId != null && !isNonPhoneSession && !isPlaybackActive
+        activeChannelId != null && !isNonPhoneSession && !isPlaybackActive && interactionBlockedReason == null
 
     val title: String
     val subtitle: String
@@ -784,6 +804,13 @@ private fun PhonePttDock(
     val borderColor: Color
 
     when {
+        interactionBlockedReason != null -> {
+            title = "Full-duplex conversation"
+            subtitle = interactionBlockedReason
+            containerColor = NearBlack
+            contentColor = StatusCyan
+            borderColor = StatusCyan
+        }
         activeChannelId == null -> {
             title = "No channel selected"
             subtitle = "Select a channel above"
@@ -874,6 +901,7 @@ private fun PhonePttDock(
         phonePttGesture = phonePttGesture,
         phonePttTargetChannelId = phonePttTargetChannelId,
         pttAudioState = pttAudioState,
+        interactionBlockedReason = interactionBlockedReason,
     )
 
     Column(

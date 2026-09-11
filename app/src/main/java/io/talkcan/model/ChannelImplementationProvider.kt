@@ -615,6 +615,9 @@ data class ChannelPreparationTraits(
     val supportsRecoverablePreparation: Boolean,
 )
 
+/** Half-duplex channels accept PTT recordings; full-duplex channels own a continuous conversation. */
+enum class ChannelInteractionMode { HALF_DUPLEX, FULL_DUPLEX }
+
 data class ChannelImplementationDescriptor(
     val implementationId: ChannelImplementationId,
     val presentation: ChannelPresentationMetadata,
@@ -623,6 +626,7 @@ data class ChannelImplementationDescriptor(
     val requiredCapabilities: Set<ChannelCapability>,
     val preparationTraits: ChannelPreparationTraits,
     val resourceDeclarations: PackageResourcesDeclaration = PackageResourcesDeclaration(emptyList()),
+    val interactionMode: ChannelInteractionMode = ChannelInteractionMode.HALF_DUPLEX,
 ) {
     init {
         require(configuration.implementationId == implementationId) {

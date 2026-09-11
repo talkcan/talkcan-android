@@ -103,6 +103,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.withLock
 
 internal data class PluginLogProjection(
     val level: LogLevel,
@@ -354,6 +355,12 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     private val agentPlaybackScope = CapabilityScopeIdentity("agent-playback", RuntimeGeneration.next())
     private lateinit var textOutputService: SleepwalkerTextOutputService
     private lateinit var capabilityHost: ServiceChannelCapabilityHost
+    private lateinit var liveSettingsRepository: io.talkcan.live.LiveSettingsRepository
+    private lateinit var liveConversationManager: ServiceLiveConversationManager
+    private val liveToggleMutex = kotlinx.coroutines.sync.Mutex()
+    @Volatile private var destroyingService = false
+    val liveSettingsState: StateFlow<io.talkcan.live.LiveSettingsState> get() = liveSettingsRepository.state
+    val liveConversationState: StateFlow<io.talkcan.live.LiveConversationView> get() = liveConversationManager.view
     private lateinit var scanner: DeviceScanner
     private lateinit var channelRepository: ChannelRepository
     private lateinit var channelManager: ServiceChannelManager
@@ -627,7 +634,16 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
                 TalkcanLogger.w("PttForegroundService", "Durable work startup recovery failed: ${workRecovery.failure}")
             is io.talkcan.work.WorkStoreResult.Success -> Unit
         }
+        liveSettingsRepository = io.talkcan.live.LiveSettingsRepository(
+            getSharedPreferences("gpt-live-settings", MODE_PRIVATE),
+            io.talkcan.secret.AndroidKeystoreProtectedSecretStore(
+                getSharedPreferences("gpt-live-secrets", MODE_PRIVATE),
+                "talkcan.gpt-live.secret.v1",
+            ),
+        )
         providerRegistry = ChannelImplementationProviderRegistry()
+        check(providerRegistry.register(io.talkcan.live.GptLiveChannelProvider()) ==
+            io.talkcan.model.ChannelProviderRegistrationResult.Registered)
         _channelDescriptors.value = providerRegistry.descriptors()
         channelRepository = ChannelRepository(applicationContext, providerRegistry)
         stateProjector.publishChannels(emptyList())
@@ -783,6 +799,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
             audioOperation = ::audioOperationCapability,
             deferredAudioPlayback = { deferredAudioPlayback },
             networkHttp = { _ -> sharedHttpCapability },
+            liveConversation = { identity -> liveConversationManager.capability(identity) },
         )
         serviceScope.launch(Dispatchers.Default) {
             _channelDescriptors.value = providerRegistry.descriptors()
@@ -812,6 +829,53 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
         mountBindingStore.load()
         val safGrantController = io.talkcan.mount.saf.AndroidSafGrantController(contentResolver)
         safMountAdapter = io.talkcan.mount.saf.SafMountAdapter(mountBindingStore, safGrantController)
+        liveConversationManager = ServiceLiveConversationManager(
+            scope = serviceScope,
+            settings = liveSettingsRepository,
+            catalogue = { channelRepository.catalogueState.value },
+            snapshots = { stateProjector.snapshot().channels },
+            selectChannel = { id ->
+                withContext(Dispatchers.Main.immediate) {
+                    liveConversationManager.acceptsTools && channelManager.selectChannel(id)
+                }
+            },
+            audioFactory = {
+                createLiveAudioDevice(
+                    context = this,
+                    scope = serviceScope,
+                    audioManager = audioManager,
+                    coordinator = hostAudioCoordinator,
+                    mode = inputModeController.mode,
+                    workSco = sco,
+                    carDevice = configuredLiveCarDevice(),
+                    headset = headsetProxy,
+                )
+            },
+            readerFactory = { isCurrent ->
+                io.talkcan.live.SafLiveChannelReader(
+                    contentResolver = contentResolver,
+                    bindings = mountBindingStore,
+                    grants = safGrantController,
+                    definitions = { channelRepository.catalogueState.value.definitions },
+                    descriptor = { id ->
+                        (providerRegistry.resolveDescriptor(id) as? io.talkcan.model.ChannelDescriptorResolution.Available)?.descriptor
+                    },
+                    sessionIsActive = isCurrent,
+                )
+            },
+            beforeStart = {
+                withContext(Dispatchers.Main.immediate) {
+                    if (destroyingService || androidx.core.content.ContextCompat.checkSelfPermission(
+                            this@PttForegroundService, android.Manifest.permission.RECORD_AUDIO,
+                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) false else {
+                        foregroundCoordinator.ensureForeground()
+                        foregroundCoordinator.isForeground
+                    }
+                }
+            },
+            onStopped = { onLiveConversationStopped() },
+        )
         mountSelectionController = io.talkcan.ui.MountSelectionController(safMountAdapter) { request, _ ->
             serviceScope.launch {
                 runtimeRegistry.reconcileResourceBinding(channelRepository.catalogueState.value, request.ownerInstanceId)
@@ -1110,9 +1174,16 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
             refreshReadiness = ::refreshReadiness,
             monitoringRequested = { serialCoordinator.monitoringRequested },
             readyForMonitor = { stateProjector.snapshot().readyForMonitor },
-            hasActivePttSession = { pttDispatcher.activePttSession != null },
+            hasActivePttSession = { pttDispatcher.activePttSession != null || liveConversationManager.hasSession },
             refreshIntervalMs = READINESS_REFRESH_INTERVAL_MS,
         )
+        serviceScope.launch {
+            liveConversationManager.view.map { it.channelId to it.state.phase }.distinctUntilChanged().collect {
+                if (foregroundCoordinator.isForeground) {
+                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
+                }
+            }
+        }
         announcementCoordinator = RsmAnnouncementCoordinator(
             scope = serviceScope,
             catalogue = { channelRepository.catalogueState.value },
@@ -1184,20 +1255,98 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
 
     override fun onBind(intent: Intent?): IBinder = binder
 
+    fun saveLiveSettings(apiKey: String, sosChannelId: String?) {
+        serviceScope.launch {
+            liveConversationManager.closeCurrent()
+            liveSettingsRepository.save(apiKey, sosChannelId)
+            runtimeRegistry.refreshReadiness()
+        }
+    }
+
+    fun clearLiveApiKey() {
+        serviceScope.launch {
+            liveConversationManager.closeCurrent()
+            liveSettingsRepository.clearKey()
+            runtimeRegistry.refreshReadiness()
+        }
+    }
+
+    fun toggleLiveConversation() {
+        serviceScope.launch {
+            liveToggleMutex.withLock {
+                if (liveConversationManager.hasSession) {
+                    liveConversationManager.closeCurrent()
+                    return@withLock
+                }
+                val catalogue = channelRepository.catalogueState.value
+                val targetId = liveSettingsRepository.state.value.sosChannelId ?: catalogue.activeChannelId
+                val target = catalogue.definitions.firstOrNull { it.id == targetId }
+                if (target?.enabled != true || target.implementationId != io.talkcan.live.GptLiveChannelProvider.ID) {
+                    liveConversationManager.reportUnavailable("Choose an enabled GPT-Live SOS channel in Settings.")
+                    onLiveConversationStopped()
+                    return@withLock
+                }
+                val result = runtimeRegistry.dispatchSos(target.id)
+                if (!liveConversationManager.hasSession) {
+                    val message = (result as? ChannelPreparationAvailability.Unavailable)?.reason?.message
+                        ?: "Could not start GPT-Live. Check its API key and audio route."
+                    liveConversationManager.reportUnavailable(message)
+                    onLiveConversationStopped()
+                }
+            }
+        }
+    }
+
+    private suspend fun onLiveConversationStopped() {
+        if (destroyingService) return
+        withContext(Dispatchers.Main.immediate) {
+            if (destroyingService || liveConversationManager.hasSession) return@withContext
+            deferredAudioPlayback.onAudioAvailable()
+            if (!serialCoordinator.monitoringRequested && pttDispatcher.activePttSession == null) {
+                foregroundCoordinator.stopForegroundIfNeeded()
+                stopSelf()
+            } else {
+                foregroundCoordinator.reevaluateSerialDisconnectShutdown()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun configuredLiveCarDevice(): BluetoothDevice? {
+        if (inputModeController.mode != InputMode.OnTheRoad || !RequiredPermissions.hasBluetoothConnect(this)) return null
+        val proxy = headsetProxy ?: return null
+        val devices = runCatching { proxy.connectedDevices }.getOrNull() ?: return null
+        val resolution = resolveConfiguredCarHfpDevice(
+            configuredCar = carHfpConfigurationStore.configuredCar.value,
+            inspection = CarHfpProfileInspection.Available(devices),
+            targetRsmAddress = targetRsm()?.address,
+            addressOf = { it.address },
+            isConnected = { proxy.getConnectionState(it) == BluetoothProfile.STATE_CONNECTED },
+        )
+        return (resolution as? ConfiguredCarResolution.Resolved)?.device
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_START_MONITORING) {
-            foregroundCoordinator.onStartCommand(
-                monitoringRequested = serialCoordinator.monitoringRequested,
+        when (intent?.action) {
+            ACTION_START_MONITORING -> foregroundCoordinator.onStartCommand(
+                monitoringRequested = serialCoordinator.monitoringRequested || liveConversationManager.hasSession,
                 startId = startId,
             )
+            ACTION_TOGGLE_LIVE -> {
+                foregroundCoordinator.ensureForeground()
+                if (foregroundCoordinator.isForeground) toggleLiveConversation()
+            }
+            ACTION_END_LIVE -> serviceScope.launch { liveConversationManager.closeCurrent() }
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        destroyingService = true
         runBlocking {
             withContext(Dispatchers.Default) {
                 withTimeoutOrNull(45_000L) {
+                    liveConversationManager.shutdown()
                     pttDispatcher.cancelAnyActivePttForServiceTeardown(
                         caller = PttCancellationCaller.ServiceTeardown,
                         reason = "Service teardown",
@@ -1607,6 +1756,7 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     fun setInputMode(mode: InputMode): Boolean = setInputMode(mode, InputModeSelection.User)
 
     fun setInputMode(mode: InputMode, by: InputModeSelection): Boolean {
+        if (liveConversationManager.hasSession) return false
         val changed = inputModeController.setInputMode(mode, by)
         if (changed) {
             publishInputMode()
@@ -1621,7 +1771,11 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     private fun updateInputMode() {
         val readyForMonitor = stateProjector.snapshot().readyForMonitor
         val aaConnected = AndroidAutoPresenceBus.isConnected()
+        val previousMode = inputModeController.mode
         inputModeController.updateInputs(readyForMonitor, aaConnected)
+        if (previousMode != inputModeController.mode && liveConversationManager.hasSession) {
+            serviceScope.launch { liveConversationManager.closeCurrent() }
+        }
         publishInputMode()
         if (::deferredAudioPlayback.isInitialized) {
             deferredAudioPlayback.onAudioAvailable()
@@ -1759,9 +1913,16 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
                 }
             }
             RawButtonEvent.PttReleased -> pttDispatcher.dispatchPttReleased(PttSource.Rsm)
-            RawButtonEvent.SosPressed -> serviceScope.launch {
-                if (hostAudioCoordinator.consumeSosDuringPlayback() is HostSosDisposition.DispatchToChannel) {
-                    runtimeRegistry.dispatchSos(stateProjector.snapshot().activeChannelId.orEmpty())
+            RawButtonEvent.SosPressed -> {
+                if (liveConversationManager.hasSession || liveSettingsRepository.state.value.sosChannelId != null ||
+                    stateProjector.snapshot().channels.firstOrNull { it.id == stateProjector.snapshot().activeChannelId }
+                        ?.implementationId == io.talkcan.live.GptLiveChannelProvider.ID
+                ) {
+                    toggleLiveConversation()
+                } else serviceScope.launch {
+                    if (hostAudioCoordinator.consumeSosDuringPlayback() is HostSosDisposition.DispatchToChannel) {
+                        runtimeRegistry.dispatchSos(stateProjector.snapshot().activeChannelId.orEmpty())
+                    }
                 }
             }
             else -> Unit
@@ -1822,7 +1983,9 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
                 it.copy(devicePresence = event.presence)
             }
             SerialCoordinatorEvent.RequestEnsureForeground -> foregroundCoordinator.ensureForeground()
-            SerialCoordinatorEvent.RequestStopForegroundAndSelf -> foregroundCoordinator.requestStopForegroundAndSelf()
+            SerialCoordinatorEvent.RequestStopForegroundAndSelf -> {
+                if (!liveConversationManager.hasSession) foregroundCoordinator.requestStopForegroundAndSelf()
+            }
             SerialCoordinatorEvent.RequestStopReadinessRefreshLoop -> foregroundCoordinator.stopReadinessRefreshLoop()
             SerialCoordinatorEvent.RequestReevaluateSerialDisconnectShutdown -> foregroundCoordinator.reevaluateSerialDisconnectShutdown()
             SerialCoordinatorEvent.RequestReadinessRefresh -> refreshReadiness()
@@ -1920,13 +2083,20 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
         val intent = Intent(this, MainActivity::class.java)
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, flags)
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        val live = liveConversationManager.view.value
+        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_talkcan)
-            .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_text))
+            .setContentTitle(if (live.isRunning) "Talkcan · GPT-Live" else getString(R.string.notification_title))
+            .setContentText(if (live.isRunning) "Live microphone · ${live.channelName.orEmpty()}" else getString(R.string.notification_text))
             .setOngoing(true)
             .setContentIntent(pendingIntent)
-            .build()
+        if (live.isRunning) {
+            val endIntent = Intent(this, PttForegroundService::class.java).setAction(ACTION_END_LIVE)
+            notification.addAction(
+                0, "End live", PendingIntent.getService(this, 1, endIntent, flags),
+            )
+        }
+        return notification.build()
     }
 
 
@@ -1938,6 +2108,8 @@ class PttForegroundService : Service(), CarPttCommandListener, TelecomCarPttCoor
     }
     companion object {
         const val ACTION_START_MONITORING = "io.talkcan.START_MONITORING"
+        const val ACTION_TOGGLE_LIVE = "io.talkcan.TOGGLE_LIVE"
+        const val ACTION_END_LIVE = "io.talkcan.END_LIVE"
 
         const val NOTIFICATION_CHANNEL_ID = "talkcan_device_link"
         const val NOTIFICATION_ID = 41

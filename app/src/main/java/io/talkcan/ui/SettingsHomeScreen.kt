@@ -44,6 +44,7 @@ fun SettingsHomeScreen(
     voiceReady: Boolean,
     storageReady: Boolean,
     modifier: Modifier = Modifier,
+    onLiveSettingsClick: (() -> Unit)? = null,
 ) {
     TalkcanInstrumentBackdrop(modifier = modifier) {
         Column(
@@ -102,6 +103,14 @@ fun SettingsHomeScreen(
             title = "Integrations and profiles",
             supportingText = "Provider packages, profiles, and voices."
         ) {
+            if (onLiveSettingsClick != null) {
+                SettingsRow(
+                    label = "GPT-Live",
+                    statusText = "API key and SOS full-duplex channel",
+                    enabled = true,
+                    onClick = onLiveSettingsClick,
+                )
+            }
             SettingsRow(
                 label = "Installed providers",
                 statusText = "Install and inspect GitHub provider packages",

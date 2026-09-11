@@ -14,6 +14,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Opaque lease for one host-owned full-duplex (GPT-Live) audio session. */
+data class HostFullDuplexLease internal constructor(
+    val operationId: HostAudioOperationId,
+)
+
+/** Result of attempting to reserve host audio for full-duplex use. */
+sealed interface HostFullDuplexAdmission {
+    data class Granted(val lease: HostFullDuplexLease) : HostFullDuplexAdmission
+    data object Busy : HostFullDuplexAdmission
+    data object Closed : HostFullDuplexAdmission
+}
+
 /**
  * The process-wide conversational-audio owner.
  *
@@ -68,6 +80,31 @@ internal class HostAudioCoordinator(
     fun releaseCapture(lease: HostCaptureLease): Boolean = synchronized(lock) {
         val capture = owner as? Owner.Capture ?: return@synchronized false
         if (capture.lease != lease) return@synchronized false
+        owner = null
+        true
+    }
+
+    /**
+     * Reserves the process-wide conversational-audio admission for one full-duplex session.
+     *
+     * Granted only when no half-duplex capture/playback (and no other full-duplex session)
+     * owns admission; never steals an existing lease. While the returned lease is held,
+     * [reserveCapture] reports [HostCaptureAdmission.Busy] and [play] reports
+     * [HostPlaybackResult.Busy]. The holder must call [releaseFullDuplex] exactly once,
+     * after all route/audio cleanup.
+     */
+    fun reserveFullDuplex(): HostFullDuplexAdmission = synchronized(lock) {
+        if (closed) return@synchronized HostFullDuplexAdmission.Closed
+        if (owner != null) return@synchronized HostFullDuplexAdmission.Busy
+        val lease = HostFullDuplexLease(newOperationId())
+        owner = Owner.FullDuplex(lease)
+        HostFullDuplexAdmission.Granted(lease)
+    }
+
+    /** Releases a full-duplex lease; succeeds only for the current owner. */
+    fun releaseFullDuplex(lease: HostFullDuplexLease): Boolean = synchronized(lock) {
+        val fullDuplex = owner as? Owner.FullDuplex ?: return@synchronized false
+        if (fullDuplex.lease != lease) return@synchronized false
         owner = null
         true
     }
@@ -222,6 +259,7 @@ internal class HostAudioCoordinator(
 
     private sealed interface Owner {
         class Capture(val lease: HostCaptureLease, var committed: Boolean = false) : Owner
+        class FullDuplex(val lease: HostFullDuplexLease) : Owner
         class Playback(
             val operationId: HostAudioOperationId,
             val kind: HostPlaybackKind,

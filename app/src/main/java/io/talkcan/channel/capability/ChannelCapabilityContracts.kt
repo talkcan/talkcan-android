@@ -23,6 +23,7 @@ sealed interface ChannelCapability {
     data object ProfilesRead : ChannelCapability { override val stableId = "profiles.read" }
     data object SecretsRead : ChannelCapability { override val stableId = "secrets.read" }
     data object WorkQueue : ChannelCapability { override val stableId = "work.queue" }
+    data object LiveConversation : ChannelCapability { override val stableId = "live-conversation" }
 }
 
 /**
@@ -107,6 +108,7 @@ sealed class CapabilityKey<T : ChannelCapabilityPort>(val capability: ChannelCap
     data object TextOutput : CapabilityKey<TextOutputCapability>(ChannelCapability.TextOutput)
     data object DeferredAudioPlayback : CapabilityKey<DeferredAudioPlaybackCapability>(ChannelCapability.DeferredAudioPlayback)
     data object NetworkHttp : CapabilityKey<GenericHttpCapability>(ChannelCapability.NetworkHttp)
+    data object LiveConversation : CapabilityKey<LiveConversationCapability>(ChannelCapability.LiveConversation)
 }
 
 /** A semantic port. It never carries Android, hardware, route, filesystem, or coroutine ownership. */

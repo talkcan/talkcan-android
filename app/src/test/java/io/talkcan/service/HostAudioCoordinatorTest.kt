@@ -30,6 +30,30 @@ import org.junit.Test
 class HostAudioCoordinatorTest {
 
     @Test
+    fun fullDuplexExcludesPttAndPlaybackUntilTheOwningLeaseIsReleased() = runTest {
+        val coordinator = HostAudioCoordinator()
+        val lease = (coordinator.reserveFullDuplex() as HostFullDuplexAdmission.Granted).lease
+        assertEquals(HostCaptureAdmission.Busy, coordinator.reserveCapture())
+        assertEquals(HostFullDuplexAdmission.Busy, coordinator.reserveFullDuplex())
+        assertEquals(
+            HostPlaybackResult.Busy,
+            coordinator.play(RecordedPcm(ShortArray(1), 16_000)) {
+                error("Playback must not acquire a route during a live conversation")
+            },
+        )
+        assertFalse(coordinator.releaseFullDuplex(HostFullDuplexLease(HostAudioOperationId("foreign"))))
+        assertEquals(HostCaptureAdmission.Busy, coordinator.reserveCapture())
+        assertTrue(coordinator.releaseFullDuplex(lease))
+        val capture = coordinator.reserveCapture() as HostCaptureAdmission.Granted
+        assertEquals(HostFullDuplexAdmission.Busy, coordinator.reserveFullDuplex())
+        coordinator.releaseCapture(capture.lease)
+        val successor = coordinator.reserveFullDuplex() as HostFullDuplexAdmission.Granted
+        assertFalse(coordinator.releaseFullDuplex(lease))
+        assertEquals(HostCaptureAdmission.Busy, coordinator.reserveCapture())
+        coordinator.releaseFullDuplex(successor.lease)
+    }
+
+    @Test
     fun reserveCaptureFromIdleGrantsLeaseAndOwensAdmission() {
         val coordinator = HostAudioCoordinator()
 

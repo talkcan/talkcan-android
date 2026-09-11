@@ -156,6 +156,14 @@ class MainActivity : ComponentActivity() {
                 ?: remember { mutableStateOf(io.talkcan.voice.VoiceProfileCatalogue(emptyList(), emptyList())) }
             val voiceProfileEditorState by currentService?.voiceProfileEditorState?.collectAsStateWithLifecycle()
                 ?: remember { mutableStateOf(io.talkcan.service.VoiceProfileEditorState()) }
+            val liveSettings by currentService?.liveSettingsState?.collectAsStateWithLifecycle()
+                ?: remember { mutableStateOf(io.talkcan.live.LiveSettingsState()) }
+            val liveConversation by currentService?.liveConversationState?.collectAsStateWithLifecycle()
+                ?: remember { mutableStateOf(io.talkcan.live.LiveConversationView()) }
+            val liveTargetId = liveSettings.sosChannelId ?: catalogue?.activeChannelId
+            val liveTargetName = catalogue?.definitions?.firstOrNull {
+                it.id == liveTargetId && it.enabled && it.implementationId == io.talkcan.live.GptLiveChannelProvider.ID
+            }?.name
 
             val missingPermissions = (bootstrapState as? BootstrapState.NeedsSetup)?.missingPermissions
                 ?: io.talkcan.service.RequiredPermissions.missing(this@MainActivity)
@@ -708,6 +716,15 @@ class MainActivity : ComponentActivity() {
                                     isCapturing = isCapturing,
                                     providerDescriptors = providerDescriptors,
                                     actions = actions,
+                                    liveConversation = liveConversation,
+                                    liveTargetName = liveTargetName,
+                                    onToggleLive = {
+                                        ContextCompat.startForegroundService(
+                                            this@MainActivity,
+                                            Intent(this@MainActivity, PttForegroundService::class.java)
+                                                .setAction(PttForegroundService.ACTION_TOGGLE_LIVE),
+                                        )
+                                    },
                                 )
                             } else {
                                 val currentRoute = secondaryRoute
@@ -737,6 +754,7 @@ class MainActivity : ComponentActivity() {
                                                         SecondaryRoute.GenericProfiles -> "Provider profiles"
                                                         SecondaryRoute.VoiceProfiles -> "Voice profiles"
                                                         SecondaryRoute.SystemReadiness -> "System readiness"
+                                                        SecondaryRoute.LiveSettings -> "GPT-Live"
                                                     }
                                                     Text(
                                                         text = routeTitle,
@@ -969,6 +987,12 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                 }
 
+                                                SecondaryRoute.LiveSettings -> io.talkcan.ui.LiveSettingsScreen(
+                                                    state = liveSettings,
+                                                    channels = catalogue?.definitions.orEmpty(),
+                                                    onSave = { key, target -> currentServiceState?.saveLiveSettings(key, target) },
+                                                    onClearKey = { currentServiceState?.clearLiveApiKey() },
+                                                )
                                                 SecondaryRoute.GenericProfiles -> GenericProfileManagementScreen(
                                                     state = genericProfileState,
                                                     actions = actions,
@@ -1066,6 +1090,7 @@ class MainActivity : ComponentActivity() {
                                         modelsReady = modelsReady,
                                         voiceReady = voiceReady,
                                         storageReady = storageReady,
+                                        onLiveSettingsClick = { secondaryRoute = SecondaryRoute.LiveSettings },
                                     )
                                 }
                             }

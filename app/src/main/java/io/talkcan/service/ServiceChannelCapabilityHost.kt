@@ -17,6 +17,7 @@ import io.talkcan.channel.capability.AudioOperationCapability
 import io.talkcan.channel.capability.CapabilityAvailability
 import io.talkcan.channel.capability.DeferredAudioPlaybackCapability
 import io.talkcan.channel.capability.GenericHttpCapability
+import io.talkcan.channel.capability.LiveConversationCapability
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal interface GenerationCapabilityResource {
@@ -36,6 +37,7 @@ internal class ServiceChannelCapabilityHost(
     private val audioOperation: (CapabilityScopeIdentity) -> AudioOperationCapability?,
     private val deferredAudioPlayback: (CapabilityScopeIdentity) -> DeferredAudioPlaybackCapability? = { null },
     private val networkHttp: (CapabilityScopeIdentity) -> GenericHttpCapability? = { null },
+    private val liveConversation: (CapabilityScopeIdentity) -> LiveConversationCapability? = { null },
 ) : ChannelCapabilityHost {
     override suspend fun onGenerationTermination(
         identity: CapabilityScopeIdentity,
@@ -75,6 +77,7 @@ internal class ServiceChannelCapabilityHost(
         CapabilityKey.AudioOperation -> audioOperation(identity).availability()
         CapabilityKey.DeferredAudioPlayback -> deferredAudioPlayback(identity).availability()
         CapabilityKey.NetworkHttp -> networkHttp(identity).availability()
+        CapabilityKey.LiveConversation -> liveConversation(identity).availability()
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -89,6 +92,7 @@ internal class ServiceChannelCapabilityHost(
             CapabilityKey.AudioOperation -> availableOrUnavailable(audioOperation(identity), identity)
             CapabilityKey.DeferredAudioPlayback -> availableOrUnavailable(deferredAudioPlayback(identity), identity)
             CapabilityKey.NetworkHttp -> availableOrUnavailable(networkHttp(identity), identity)
+            CapabilityKey.LiveConversation -> availableOrUnavailable(liveConversation(identity), identity)
         }
     ) as HostedCapabilityAcquisition<T>
 
@@ -151,7 +155,9 @@ internal class ServiceChannelCapabilityHost(
         port: T,
         identity: CapabilityScopeIdentity,
     ): HostedCapabilityAcquisition<T> = HostedCapabilityAcquisition.Available(port) { termination ->
-        if (termination == CapabilityLeaseTermination.REVOKED && port is GenerationCapabilityResource) {
+        if (port is GenerationCapabilityResource &&
+            (termination == CapabilityLeaseTermination.REVOKED || port is LiveConversationCapability)
+        ) {
             port.onGenerationTermination(identity, termination)
         }
     }

@@ -10,6 +10,11 @@ All notable changes to Talkcan are documented in this file.
   Lua input channels.
 - Added semantic warning tones that play through the active capture route
   before a recording reaches its limit.
+- Added a GPT-Live full-duplex capability and channel with SOS start/stop,
+  continuous microphone audio, transcripts, and a notification stop action.
+- Added encrypted API-key settings and a separate SOS channel assignment.
+- Added permission-controlled channel switching and mounted text-file reads
+  through bounded GPT-Live backend tools.
 
 ### Changed
 
@@ -32,6 +37,8 @@ All notable changes to Talkcan are documented in this file.
   the ten shipped voices cannot remain incorrectly marked as missing.
 - Kept the phone PTT pointer session active until pointer-up so releasing the
   on-screen control always stops its recording session.
+- Preserved sanitized OpenAI error codes when GPT-Live rejects session startup,
+  instead of replacing them with a generic connection failure.
 
 ## [0.10.0] - 2026-07-29
 

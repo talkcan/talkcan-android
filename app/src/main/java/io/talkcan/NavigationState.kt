@@ -17,6 +17,7 @@ enum class SecondaryRoute {
     GenericProfiles,
     VoiceProfiles,
     SystemReadiness,
+    LiveSettings,
 }
 
 data class NavigationState(

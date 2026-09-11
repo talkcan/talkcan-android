@@ -41,6 +41,7 @@ internal class ForegroundServiceCoordinator(
     private val refreshIntervalMs: Long = 5_000L,
 ) {
     private var foreground = false
+    val isForeground: Boolean get() = foreground
     private var readinessRefreshJob: Job? = null
     private var stopWhenPttIdleAfterSerialDisconnect = false
 
